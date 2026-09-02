@@ -16,6 +16,7 @@ import { runFrames } from "./verbs/frames.ts";
 import { runFlt } from "./verbs/flt.ts";
 import { formatPreflight, runPreflight } from "./verbs/preflight.ts";
 import { runProbe } from "./verbs/probe.ts";
+import { formatExec, runExec } from "./verbs/exec.ts";
 
 export interface CliResult {
   exitCode: number;
@@ -31,12 +32,18 @@ Verbs:
                             beside what it was declared to
   flt <fid> -- <command>    Follow one call, named with its #k, and show how
                             its locals changed statement by statement
+  exec <fid> --line N --statement <expr> -- <command...>
+                            Evaluate an expression inside one call, at one
+                            line, in that line's own scope
 
 Options:
   --include <path>   Instrument files under this path (default: <cwd>/src)
   --cwd <path>       Run the command here (default: the current directory)
   --index <path>     flt only: refuse if this frames index's code state
                       does not match the working tree this run starts from
+  --line <n>         exec only: the line to evaluate at
+  --visit <k>        exec only: which visit to that line (default: 1)
+  --statement <expr> exec only: the expression to evaluate
 
 The command is the rerun line a failure printed, for example:
   depug frames -- npx vitest run "test/user.test.ts" -t "parses a user"
@@ -49,6 +56,9 @@ interface ParsedArgs {
   operands: string[];
   include?: string;
   cwd?: string;
+  line?: number;
+  visit?: number;
+  statement?: string;
   index?: string;
 }
 
@@ -66,6 +76,9 @@ export function parseArgs(argv: readonly string[]): ParsedArgs | { error: string
     const arg = before[i];
     if (arg === "--include") parsed.include = before[++i];
     else if (arg === "--cwd") parsed.cwd = before[++i];
+    else if (arg === "--line") parsed.line = Number(before[++i]);
+    else if (arg === "--visit") parsed.visit = Number(before[++i]);
+    else if (arg === "--statement") parsed.statement = before[++i];
     else if (arg === "--index") parsed.index = before[++i];
     else if (arg.startsWith("--")) return { error: `unknown option: ${arg}` };
     else parsed.operands.push(arg);
@@ -184,6 +197,27 @@ export function run(argv: readonly string[]): CliResult {
     }
     lines.push(`depug result: ${describeExit(result.envelope.exit_status)}`);
     return { exitCode: 0, stdout: `${lines.join("\n")}\n` };
+  }
+
+  if (parsed.verb === "exec") {
+    if (parsed.operands.length === 0) {
+      return { exitCode: 2, stdout: `depug: exec needs a function id\n\n${USAGE}` };
+    }
+    if (parsed.line === undefined || !Number.isFinite(parsed.line)) {
+      return { exitCode: 2, stdout: `depug: exec needs --line\n\n${USAGE}` };
+    }
+    if (parsed.statement === undefined || parsed.statement === "") {
+      return { exitCode: 2, stdout: `depug: exec needs --statement\n\n${USAGE}` };
+    }
+    const result = runExec({
+      fid: parsed.operands[0],
+      atLine: parsed.line,
+      visit: parsed.visit ?? 1,
+      expression: parsed.statement,
+      command: [...parsed.command],
+      cwd,
+    });
+    return { exitCode: result.error ? 2 : 0, stdout: `${formatExec(result)}\n` };
   }
 
   return { exitCode: 2, stdout: `depug: unknown verb: ${parsed.verb}\n\n${USAGE}` };

@@ -162,6 +162,31 @@ reports nothing, because those accept every runtime kind — read the
 An empty `mismatches` means the two shallow views agreed. It does not mean
 the value was correct.
 
+## Test a hypothesis without editing the source
+
+Once a trace shows you where a value went wrong, `exec` answers what would
+happen if it had not. The expression runs in that line's own scope, so
+assigning to a local changes that local:
+
+```sh
+depug exec "src/app.ts:sumUntil@18:17#1" --line 21 --statement "total = 100" \
+  -- npx vitest run "app.test.ts" -t "sums up to a limit"
+```
+
+```text
+depug value: 100
+depug result: fail (exit 1)
+```
+
+`--visit K` selects a later visit to that line; the default is the first.
+
+Read the result file before you treat the changed outcome as evidence. The
+expression can throw, change what the test does, and perform side effects,
+and the run's own outcome is reported beside the value for that reason.
+
+An expression only ever runs under this verb. The launcher arms it; nothing
+else does.
+
 ## Read what depug did not observe
 
 Treat these as absences the files declare, not as facts about the program.
