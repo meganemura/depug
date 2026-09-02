@@ -184,6 +184,21 @@ with four million trivial calls.
 Instrumenting one project's whole suite ran 4961 tests to the same result
 as without it, in 14.31 s against a 14 s baseline.
 
+## Monorepos
+
+A repository that splits its run into vitest projects works without extra
+arguments, as long as `--include` points inside the project holding the
+code:
+
+```sh
+depug frames --include packages/zod/src -- npx vitest run "packages/zod/src/.../array.test.ts" -t "^array min/max$"
+```
+
+vitest does not apply a root config's plugins to a project's own config, so
+depug names that project inline instead, extending its config and keeping
+its own directory as the root. Every relative path in that config resolves
+where it did before.
+
 ## Test runners
 
 The verbs read the command you hand them and set themselves up

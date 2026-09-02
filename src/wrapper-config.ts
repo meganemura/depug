@@ -15,8 +15,8 @@
 // project's own dependencies back on that path, while keeping the file out
 // of the source tree. Each wrapper gets a unique name so two verbs running
 // at once do not share one.
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PLUGIN_MODULE = fileURLToPath(new URL("./plugin.ts", import.meta.url));
@@ -41,6 +41,25 @@ export function findProjectConfig(cwd: string): string | undefined {
     if (existsSync(candidate)) return candidate;
   }
   return undefined;
+}
+
+/**
+ * True where a project's config splits the run into vitest projects.
+ *
+ * This matters because vitest does not apply a root config's `plugins` to
+ * a project's own config, so a wrapper built by merging into the root
+ * reaches none of the code under test. depug records nothing and, without
+ * this check, reports it as an include path that matched no files, which
+ * sends a reader to fix the one thing that was not wrong.
+ *
+ * The check reads the config's text rather than importing it: importing an
+ * arbitrary project config runs it, and this question does not need the
+ * answer badly enough to do that.
+ */
+export function declaresProjects(configPath: string | undefined): boolean {
+  if (!configPath || !existsSync(configPath)) return false;
+  const text = readFileSync(configPath, "utf8");
+  return /(^|[^\w.])projects\s*:/.test(text) || /\bworkspace\s*:/.test(text);
 }
 
 export interface WrapperInput {
@@ -75,6 +94,7 @@ export function writeWrapperConfig(input: WrapperInput): Wrapper {
     slug: "run",
     pluginModule: PLUGIN_MODULE,
     pluginExport: "depugPlugin",
+    projectFor: input.includePathPrefix,
     pluginOptions: [
       "{",
       `  root: ${JSON.stringify(input.cwd)},`,
@@ -90,6 +110,26 @@ export function writeWrapperConfig(input: WrapperInput): Wrapper {
       "to the project's own config and changes nothing else.",
     ],
   });
+}
+
+/**
+ * The nearest config at or above `startPath`, stopping at `cwd`.
+ *
+ * In a repository split into vitest projects, the config that governs the
+ * code under test is the one in that package, not the one at the root.
+ */
+export function findEnclosingProjectConfig(
+  startPath: string,
+  cwd: string,
+): { configPath: string; root: string } | undefined {
+  let dir = startPath;
+  for (;;) {
+    const found = findProjectConfig(dir);
+    if (found && resolve(dir) !== resolve(cwd)) return { configPath: found, root: dir };
+    const parent = dirname(dir);
+    if (parent === dir || resolve(dir) === resolve(cwd)) return undefined;
+    dir = parent;
+  }
 }
 
 export interface GeneratedConfigInput {
@@ -109,6 +149,12 @@ export interface GeneratedConfigInput {
   pluginOptions: string;
   /** Header comment lines, without the leading slashes. */
   comment: string[];
+  /**
+   * A path inside the code to instrument. Used only where the project's
+   * config splits the run into vitest projects, to find the project that
+   * owns that code.
+   */
+  projectFor?: string;
 }
 
 /**
@@ -132,11 +178,35 @@ export function writeGeneratedConfig(input: GeneratedConfigInput): Wrapper {
   const dir = mkdtempSync(join(holder, `${input.slug}-`));
   const configPath = join(dir, `vitest.depug-${input.slug}.config.ts`);
 
-  const added = [
-    "const added = defineConfig({",
-    `  plugins: [${input.pluginExport}(${input.pluginOptions})],`,
-    "});",
-  ];
+  // vitest does not apply a root config's `plugins` to a project's own
+  // config, so merging the plugin into the root reaches none of the code
+  // under test. Naming the project inline, with its own config extended
+  // and its own directory as the root, puts the plugin where the code is
+  // and leaves every relative path in that config resolving as it did.
+  const project =
+    input.projectFor && declaresProjects(base)
+      ? findEnclosingProjectConfig(input.projectFor, input.cwd)
+      : undefined;
+
+  const added = project
+    ? [
+        "const added = defineConfig({",
+        "  test: {",
+        "    projects: [",
+        "      {",
+        `        extends: ${JSON.stringify(project.configPath)},`,
+        `        root: ${JSON.stringify(project.root)},`,
+        `        plugins: [${input.pluginExport}(${input.pluginOptions})],`,
+        "      },",
+        "    ],",
+        "  },",
+        "});",
+      ]
+    : [
+        "const added = defineConfig({",
+        `  plugins: [${input.pluginExport}(${input.pluginOptions})],`,
+        "});",
+      ];
 
   const lines = [
     ...input.comment.map((line) => `// ${line}`),

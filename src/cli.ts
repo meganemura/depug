@@ -12,6 +12,7 @@ import { resolve } from "node:path";
 import { writeJson } from "./evidence.ts";
 import { parseFid } from "./fid.ts";
 import { renderDeclared, renderObserved } from "./shape-report.ts";
+import { declaresProjects, findProjectConfig } from "./wrapper-config.ts";
 import { runFrames } from "./verbs/frames.ts";
 import { runFlt } from "./verbs/flt.ts";
 import { formatPreflight, runPreflight } from "./verbs/preflight.ts";
@@ -116,6 +117,16 @@ export function run(argv: readonly string[]): CliResult {
       // reaches, so the note names that before anything else.
       lines.push("depug note: no application calls were recorded");
       lines.push(`depug note: nothing under ${includePathPrefix} ran; use --include to point elsewhere`);
+      const config = findProjectConfig(cwd);
+      if (declaresProjects(config)) {
+        // The include path is also what locates the project holding the
+        // code, so in a project-split repository a wrong one fails twice
+        // over and the second way is not obvious.
+        lines.push(
+          `depug note: ${config} splits the run into vitest projects, so --include also has to` +
+            " point inside the project whose code you want",
+        );
+      }
     }
     lines.push(`depug result: ${describeExit(result.envelope.exit_status)}`);
     return { exitCode: 0, stdout: `${lines.join("\n")}\n` };

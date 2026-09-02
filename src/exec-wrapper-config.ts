@@ -1,5 +1,6 @@
 // Generates the config that loads the injection rewrite. The rules it
 // follows live in wrapper-config.ts, shared with every other verb.
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeGeneratedConfig, type Wrapper } from "./wrapper-config.ts";
 
@@ -19,6 +20,7 @@ export function writeExecWrapperConfig(input: ExecWrapperInput): Wrapper {
   return writeGeneratedConfig({
     cwd: input.cwd,
     slug: "exec",
+    projectFor: dirname(resolve(input.cwd, input.targetPath)),
     pluginModule: PLUGIN_MODULE,
     pluginExport: "depugExecPlugin",
     pluginOptions: [

@@ -1,6 +1,7 @@
 // Generates the config that loads the probe rewrite into a project's own
 // test run. The rules it follows -- where the file goes, and why -- live
 // in wrapper-config.ts, which every verb's generated config shares.
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeGeneratedConfig, type Wrapper } from "../wrapper-config.ts";
 
@@ -15,6 +16,11 @@ export function writeProbeWrapperConfig(input: ProbeWrapperInput): Wrapper {
   return writeGeneratedConfig({
     cwd: input.cwd,
     slug: "probe",
+    // A target names its own file, which is what locates the project that
+    // owns it in a repository split into vitest projects.
+    projectFor: input.targets[0]
+      ? dirname(resolve(input.cwd, input.targets[0].slice(0, input.targets[0].indexOf(":"))))
+      : undefined,
     pluginModule: PLUGIN_MODULE,
     pluginExport: "depugProbePlugin",
     pluginOptions: `{ root: ${JSON.stringify(input.cwd)}, targets: ${JSON.stringify(input.targets)} }`,

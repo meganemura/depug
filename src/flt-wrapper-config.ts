@@ -2,6 +2,7 @@
 // project's own test run. The rules it follows -- where the file goes, why
 // it goes there, and how a project with no config of its own is handled --
 // live in wrapper-config.ts, which every verb's generated config shares.
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeGeneratedConfig, type Wrapper } from "./wrapper-config.ts";
 
@@ -27,6 +28,7 @@ export function writeFltWrapperConfig(input: FltWrapperInput): FltWrapper {
     cwd: input.cwd,
     baseConfig: input.baseConfig,
     slug: "flt",
+    projectFor: dirname(resolve(input.cwd, input.target.path)),
     pluginModule: PLUGIN_MODULE,
     pluginExport: "depugFltPlugin",
     pluginOptions: [
