@@ -30,6 +30,7 @@
 // land on one character; see flt.md for the cases this was checked
 // against.
 import ts from "typescript";
+import { functionIdentity } from "./function-identity.ts";
 
 export interface FltTarget {
   name: string;
@@ -71,42 +72,8 @@ function hasExpressionBody(node: InstrumentableNode): node is ts.ArrowFunction {
   return ts.isArrowFunction(node) && !ts.isBlock(node.body);
 }
 
-function findNameNode(node: InstrumentableNode): ts.Identifier | undefined {
-  if ((ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)) && node.name) {
-    return node.name;
-  }
-  if (
-    (ts.isMethodDeclaration(node) || ts.isGetAccessor(node) || ts.isSetAccessor(node)) &&
-    ts.isIdentifier(node.name)
-  ) {
-    return node.name;
-  }
-  const parent = node.parent;
-  if (parent && ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
-    return parent.name;
-  }
-  if (
-    parent &&
-    (ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent)) &&
-    ts.isIdentifier(parent.name)
-  ) {
-    return parent.name;
-  }
-  return undefined;
-}
-
-function functionDisplayName(node: InstrumentableNode, nameNode: ts.Identifier | undefined): string {
-  if (nameNode) return nameNode.text;
-  if (ts.isConstructorDeclaration(node)) return "constructor";
-  if (
-    (ts.isMethodDeclaration(node) || ts.isGetAccessor(node) || ts.isSetAccessor(node)) &&
-    !ts.isIdentifier(node.name)
-  ) {
-    return "<computed>";
-  }
-  return "<anonymous>";
-}
-
+// Positions for a statement, as opposed to a function's own declaration,
+// which function-identity.ts owns.
 function toLineColumn(sourceFile: ts.SourceFile, pos: number): { line: number; column: number } {
   const lc = sourceFile.getLineAndCharacterOfPosition(pos);
   return { line: lc.line + 1, column: lc.character + 1 };
@@ -193,10 +160,7 @@ export function listInstrumentableFunctions(source: string, fileId: string): Flt
 
   function visit(node: ts.Node): void {
     if (isInstrumentableFunction(node)) {
-      const nameNode = findNameNode(node);
-      const name = functionDisplayName(node, nameNode);
-      const posNode: ts.Node = nameNode ?? node;
-      const { line, column } = toLineColumn(sourceFile, posNode.getStart(sourceFile));
+      const { name, line, column } = functionIdentity(node, sourceFile, fileId);
       targets.push({ name, line, column });
     }
     ts.forEachChild(node, visit);
@@ -224,10 +188,7 @@ export function instrumentTarget(source: string, fileId: string, target: FltTarg
   function findTarget(node: ts.Node): void {
     if (targetNode) return;
     if (isInstrumentableFunction(node)) {
-      const nameNode = findNameNode(node);
-      const name = functionDisplayName(node, nameNode);
-      const posNode: ts.Node = nameNode ?? node;
-      const { line, column } = toLineColumn(sourceFile, posNode.getStart(sourceFile));
+      const { name, line, column } = functionIdentity(node, sourceFile, fileId);
       if (line === target.line && column === target.column && name === target.name) {
         targetNode = node;
         targetLine = line;
