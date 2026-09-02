@@ -120,3 +120,28 @@ describe("flt", () => {
     expect(result.stdout).toContain("needs a complete function id, including #k");
   });
 });
+
+describe("statements inside try and switch", () => {
+  // These used to be invisible. The records around a `try` were written
+  // and the ones inside were not, so a trace read like a function that did
+  // nothing between its braces, with no marker saying it had stopped
+  // looking. On 25 real bug fixes this was a common shape.
+  it("follows a value through try, catch, finally, and a switch clause", () => {
+    const fid = fidFor(readRecords(framesFile()), "guarded", 1);
+    const result = cli("flt", fid);
+    const file = /^depug flt: (.+)$/m.exec(result.stdout)![1];
+
+    const changes = readRecords(file)
+      .filter((r) => r.type === "line" && Object.keys((r.changed ?? {}) as object).length > 0)
+      .map((r) => [r.line, ((r.changed as Record<string, { new: { value: string } }>).label).new.value]);
+
+    // The fixture takes the throwing path, so the value crosses the try
+    // body, the catch body, the finally body, and the switch's default.
+    expect(changes).toEqual([
+      [35, '"in-try"'],
+      [40, '"in-catch"'],
+      [42, '"in-catch+finally"'],
+      [49, '"in-catch+finally+other"'],
+    ]);
+  }, 120_000);
+});

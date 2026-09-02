@@ -295,6 +295,12 @@ are in completion order rather than source order.** A statement holding
 other statements finishes last: an `if` on line 10 whose body is line 11
 records 11, then 10. Read the `line` field, not the position in the file.
 
+The trace follows statements inside a block, a branch, a loop, a `try`,
+its `catch`, its `finally`, and a `switch` clause. A branch written
+without braces (`if (c) f();`) records only the `if` itself, because a
+record placed after `f()` there would run whether or not the branch was
+taken.
+
 A `skipped_iterations` record replaces a loop's folded middle and carries
 the `count` of iterations dropped. The trace keeps the first and the last.
 Values inside the skipped iterations were not observed, and the marker

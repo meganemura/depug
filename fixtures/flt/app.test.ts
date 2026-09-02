@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { classify, explode, sumUntil } from "./src/app.ts";
+import { classify, explode, guarded, sumUntil } from "./src/app.ts";
 
 it("classifies numbers", () => {
   expect(classify(5)).toBe("positive");
@@ -12,4 +12,8 @@ it("sums up to a limit", () => {
 
 it("explodes", () => {
   expect(() => explode()).toThrow("boom");
+});
+
+it("runs through try, catch, finally and switch", () => {
+  expect(guarded(-1)).toBe("in-catch+finally+other");
 });

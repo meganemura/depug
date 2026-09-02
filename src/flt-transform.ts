@@ -351,10 +351,55 @@ export function instrumentTarget(source: string, fileId: string, target: FltTarg
       // or class value is not a statement-lifetime local worth showing),
       // and its body is not walked: a different frame, per the module
       // header.
+    } else if (ts.isTryStatement(stmt)) {
+      processTry(stmt);
+    } else if (ts.isSwitchStatement(stmt)) {
+      processSwitch(stmt);
+    } else if (ts.isLabeledStatement(stmt)) {
+      processStatementBody(stmt.statement);
     }
-    // Every other statement kind -- an expression statement, a `try`, a
-    // `switch`, a labeled statement -- is left as an opaque leaf: no
-    // per-statement detail inside it. See flt.md for what this leaves out.
+    // An expression statement is a leaf: it has no statements of its own.
+  }
+
+  /**
+   * The three blocks of a `try`, each its own scope.
+   *
+   * Leaving these opaque used to hide whatever a function did inside them,
+   * and a trace has no way to show that it stopped looking: the records
+   * around the `try` are there, the ones inside are simply absent, and the
+   * result reads like a function that did nothing between its braces.
+   * Measured on 25 real bug fixes, this was a common shape.
+   */
+  function processTry(stmt: ts.TryStatement): void {
+    processBranch(stmt.tryBlock);
+
+    if (stmt.catchClause) {
+      pushScope();
+      // The caught binding is visible for the clause's own body.
+      if (stmt.catchClause.variableDeclaration) {
+        const bound: string[] = [];
+        collectBoundNames(stmt.catchClause.variableDeclaration.name, bound);
+        for (const name of bound) addVisible(name);
+      }
+      for (const child of stmt.catchClause.block.statements) processStatement(child);
+      popScope();
+    }
+
+    if (stmt.finallyBlock) processBranch(stmt.finallyBlock);
+  }
+
+  /**
+   * A switch's clauses share one block scope, so this pushes once around
+   * all of them rather than once for each. A `case` body is a statement
+   * list inside the switch's own braces, so a capture after one of its
+   * statements stays inside the switch.
+   */
+  function processSwitch(stmt: ts.SwitchStatement): void {
+    pushScope();
+    for (const clause of stmt.caseBlock.clauses) {
+      for (const child of clause.statements) processStatement(child);
+    }
+    popScope();
   }
 
   /**
