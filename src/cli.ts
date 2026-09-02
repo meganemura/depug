@@ -201,6 +201,17 @@ export function run(argv: readonly string[]): CliResult {
         `depug note: call #${result.envelope.target_index} did not happen; ` +
           `observed ${result.envelope.observed_calls} call(s) of this function`,
       );
+    } else if (result.records.every((record) => record.type !== "line")) {
+      // The call happened and produced no statement records, which reads
+      // like a function that did nothing. It usually means the body is a
+      // single expression -- an arrow returning a call, say -- so the work
+      // is in a function this one returns or hands off to, and that
+      // function is a frame of its own.
+      lines.push(
+        "depug note: this call has no statements of its own to follow; " +
+          "its body is a single expression, so the work is in a function it calls",
+      );
+      lines.push("depug note: find that call in a frames index and trace it instead");
     }
     lines.push(`depug result: ${describeExit(result.envelope.exit_status)}`);
     return { exitCode: 0, stdout: `${lines.join("\n")}\n` };

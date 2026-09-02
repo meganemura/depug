@@ -50,3 +50,12 @@ export function guarded(n: number): string {
   }
   return label;
 }
+
+// An arrow whose body is a single expression. It has no statements of its
+// own, so a trace of it is empty and the work is in the function it
+// returns.
+export const makeAdder = (base: number) =>
+  function add(n: number): number {
+    const sum = base + n;
+    return sum;
+  };

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { classify, explode, guarded, sumUntil } from "./src/app.ts";
+import { classify, explode, guarded, makeAdder, sumUntil } from "./src/app.ts";
 
 it("classifies numbers", () => {
   expect(classify(5)).toBe("positive");
@@ -16,4 +16,8 @@ it("explodes", () => {
 
 it("runs through try, catch, finally and switch", () => {
   expect(guarded(-1)).toBe("in-catch+finally+other");
+});
+
+it("builds an adder", () => {
+  expect(makeAdder(10)(5)).toBe(15);
 });

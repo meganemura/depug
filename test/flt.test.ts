@@ -145,3 +145,16 @@ describe("statements inside try and switch", () => {
     ]);
   }, 120_000);
 });
+
+describe("a call with no statements of its own", () => {
+  it("says so, and says where to look instead", () => {
+    // An arrow whose body is one expression produces a trace with a call
+    // and a return and nothing between. That reads like a function that
+    // did nothing; the work is in the function it hands back, which is a
+    // frame of its own.
+    const fid = fidFor(readRecords(framesFile()), "makeAdder", 1);
+    const result = cli("flt", fid);
+    expect(result.stdout).toContain("no statements of its own to follow");
+    expect(result.stdout).toContain("frames index");
+  }, 120_000);
+});

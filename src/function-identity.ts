@@ -51,6 +51,16 @@ export function findNameNode(node: NamedFunction): ts.Identifier | undefined {
 
 export function displayName(node: NamedFunction, nameNode: ts.Identifier | undefined): string {
   if (nameNode) return nameNode.text;
+  // A private method has a name; it is just not an Identifier. Calling it
+  // "<computed>" throws that name away and puts every private method in a
+  // file on one label, which is the collision the position in an id exists
+  // to prevent.
+  if (
+    (ts.isMethodDeclaration(node) || ts.isGetAccessor(node) || ts.isSetAccessor(node)) &&
+    ts.isPrivateIdentifier(node.name)
+  ) {
+    return node.name.text;
+  }
   // A constructor has no name of its own, but "constructor" reads better
   // in an index than the fallback, and the class it belongs to is already
   // visible from the path and line.

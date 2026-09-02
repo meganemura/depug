@@ -116,3 +116,27 @@ it("writes the id as path:name@line:column#k", async () => {
   // in whatever the file becomes after the types are stripped.
   expect(enter.fn).toBe("grammar.ts:alpha@1:17#1");
 });
+
+it("names a private method by its own name, not <computed>", async () => {
+  // A private method's name is a PrivateIdentifier rather than an
+  // Identifier. Reading that as "computed" throws the name away and puts
+  // every private method in a file under one label, which is exactly the
+  // collision the position in an id exists to prevent.
+  const source = [
+    "export class Store {",
+    "  #load() { return 1; }",
+    "  #save() { return 2; }",
+    "  run() { return this.#load() + this.#save(); }",
+    "}",
+  ].join("\n");
+
+  const mod = await load(source, "store.ts");
+  const Store = mod.Store as new () => { run(): number };
+  expect(new Store().run()).toBe(3);
+
+  const names = runtime
+    .dump()
+    .filter((e) => e.kind === "enter")
+    .map((e) => e.fn.slice(e.fn.indexOf(":") + 1, e.fn.indexOf("@")));
+  expect(names.sort()).toEqual(["#load", "#save", "run"]);
+});
