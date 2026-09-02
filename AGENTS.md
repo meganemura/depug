@@ -84,6 +84,15 @@ Measurements from 2026-09-02 on Node v26.7.0 (arm64, macOS) with vitest 4.1.11.
 - An in-process `node:inspector` session can pause on a caught exception and read locals. The cost was 93 µs per exception for one scope read, and 1.007x on a loop with no exception. The pause handler must use callback style and must not await. depug does not use this path in v0.1, and this fact documents why locals are possible later.
 - `node --random-seed=42` makes `Math.random` return the same sequence on two runs.
 
+Measurements from 2026-09-03 on the same machine, for node:test.
+
+- `NODE_OPTIONS="--import <hook>"` reaches the child process node:test starts for each test file. A plain `--import` on the command line does not: it applies to the parent.
+- A `module.registerHooks()` load hook receives the original TypeScript, types intact (`format: "module-typescript"`), so a rewrite there sees what the author wrote.
+- A `beforeEach` registered from a preloaded module fires for tests declared later and receives the test's name.
+- Node's type stripping preserves positions, so a stack from a stripped `.ts` file already carries the author's line and column. An assertion on line 7 reported line 7.
+- A `test:fail` event fires for an enclosing `describe` too, carrying `failureType: "subtestsFailed"`; the test's own event carries `testCodeFailure`, and the thrown error is in `details.error.cause`.
+- `--test-name-pattern` matches a test's own name, not its full path. Repeating the flag widens the selection rather than narrowing it, so one nested test cannot be named exactly.
+
 ## Conventions
 
 - Add a dependency only with the owner's approval. Pin the exact version. The version must be at least 7 days old with no later security fix.

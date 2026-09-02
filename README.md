@@ -200,8 +200,18 @@ that step through a vite plugin; Node owns it through
 `module.registerHooks`, which the verbs reach with `NODE_OPTIONS`. The ids,
 the coordinates, and the files are identical.
 
-Under node:test the reporter is not wired yet, so a failure prints no
-evidence lines there. Point a verb at the failing test by hand.
+For node:test the reporter is a `--test-reporter`:
+
+```sh
+node --test --test-reporter=depug/node-test-reporter --test-reporter-destination=stdout \
+     --test-reporter=spec --test-reporter-destination=stderr
+```
+
+One difference is worth knowing. `--test-name-pattern` matches a test's own
+name and not the suites around it, and repeating the flag widens the
+selection rather than narrowing it, so a rerun command there names the test
+and any same-named test elsewhere in the same file. That is node:test's
+CLI; the printed command says what it selects.
 
 ## Scope of version 0.1
 

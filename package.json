@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./reporter": "./src/reporter.ts",
     "./plugin": "./src/plugin.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./node-test-reporter": "./src/node-test-reporter.ts"
   },
   "bin": {
     "depug": "./bin/depug.ts"
