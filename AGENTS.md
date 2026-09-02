@@ -27,15 +27,52 @@ When you want to reference one, write its substance in place.
 
 The owner settled these points on 2026-09-02.
 Change them only with the owner.
+Three of them carry a measurement the owner delegated on the same day; the
+next section records those and what each one measured.
 
 - **Instrumentation runs in the transform pipeline.** TypeScript becomes JavaScript before it runs, and the test runner owns that step. depug rewrites the source of the target functions at that step and runs the rest unchanged. It does not use the V8 inspector for re-execution verbs.
 - **Positions are literals.** The transform embeds the TypeScript line and column as literals in the rewritten code. Later transforms (esbuild, vite) keep literals unchanged, so the evidence carries TypeScript coordinates without source maps.
 - **The always-on layer records failure text only in v0.1.** The evidence file holds the test name, the error, the stack in TypeScript coordinates, the rerun command, and the code state. It does not hold locals. A locals capture mode can come later without a change to the schema contract.
 - **Declared types are a column from v0.1.** `probe` and `flt` show the observed shape of values next to the declared type. The declared type comes from the TypeScript compiler API at transform time as a shallow projection: property names, primitive kinds, optional, and null. depug does not run a full validator.
-- **The verbs are the same as bulldogger.** `snap` (always on), `frames`, `preflight`, `flt`, `exec`, `probe`. A function id is `path:function#k`, where `k` counts entries of that function inside one test window.
+- **The verbs are the same as bulldogger.** `snap` (always on), `frames`, `preflight`, `flt`, `exec`, `probe`. A function id is `path:name@line:column#k`, where the position is the function's declaration in the TypeScript source and `k` counts entries of that function inside one test window.
 - **vitest first.** node:test comes next through `module.registerHooks()`. jest comes after that through its transform setting.
-- **The parser is `typescript`.** It is the language vendor's parser. Speed matters less because the transform targets one file or one function per rerun.
+- **The parser is `typescript`, versions 5.5.4 through 6.x.** It is the language vendor's parser. Speed matters less because the transform targets one file or one function per rerun. TypeScript 7 is a separate decision, recorded below.
 - **Distribution is one npm package plus one bundled skill.** Files (JSON, JSONL) are the primary API. The schema is the public contract.
+
+## Decisions from the stage A measurements
+
+The owner delegated these three on 2026-09-02, after the stage A numbers came in.
+
+- **The function id carries the declaration position: `path:name@line:column#k`.**
+  A name alone does not tell two JavaScript functions apart. Instrumenting hono at
+  one pinned commit found 725 functions, 175 of them anonymous; under a name-only
+  id, 250 of them (34.5%) shared an id with at least one other function, the worst
+  case being 17 functions on one id. A shared id means a shared call counter, so
+  `#k` addresses a different call on a rerun. Adding the position brought the same
+  measurement to 0 of 792 functions sharing an id. The transform already measures
+  the position for the event payload, so the id costs nothing extra.
+
+- **`typescript` is a peer dependency at `>=5.5.4 <7.0.0`. depug does not support
+  TypeScript 7 in v0.1.** TypeScript 7.0.2 is the `latest` tag on npm and is the
+  native reimplementation. Its package exports `.` to a version file; the parser
+  and the checker moved behind `typescript/unstable/ast` and
+  `typescript/unstable/sync`. Reading the 409 names `unstable/ast` exports found
+  node predicates, a scanner, a factory, and position helpers, and found no entry
+  point that parses source text into a tree. depug parses one file per rerun, so
+  that entry point is the one thing it cannot do without. The three versions in
+  the supported range were each run against the whole hono corpus: 5.5.4, 5.9.3,
+  and 6.0.3 all found the same 792 functions and projected the same declared
+  types. Real projects measured on the same day sat inside this range: hono 6.0.3,
+  vueuse 6.0.3, zod 5.5.4.
+
+- **`snap` records failure text only, with no locals.** Classifying 155 real
+  failures from hono's own history put 94.2% in the shape where the function that
+  produced the wrong value had already returned before the assertion threw, so its
+  locals were gone from the stack. The remaining 5.8% came from three distinct
+  bugs. Capturing locals in JavaScript means the V8 inspector, which binds depug
+  to one runtime, adds a coordinate translation, and costs 93 µs for every caught
+  exception, thrown or not. `frames` and `flt` reach the same values on demand for
+  the 5.8%. A locals capture mode can arrive later without changing the schema.
 
 ## Mechanism facts
 
