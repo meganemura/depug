@@ -27,18 +27,23 @@ command like it and starts a new process only when you ask.
 ```text
 tmp/depug/
   latest -> run-20260902-2138-41207
-  run-20260902-2138-41207/
+  run-20260902-2138-41207/          one suite run's failures
     001-parses-a-user.json
     002-rejects-a-bad-id.json
     index.json
-  frames-41310.jsonl
-  flt-41355.jsonl
-  exec-41402.jsonl
-  probe-41455.json
+  frames-a7Kd2p/                    one `frames` invocation
+    frames-41310.jsonl
+  flt-Qm81xz/
+    flt-41355.jsonl
 ```
 
-`latest` points at the last finished run where the filesystem supports a
-symlink.
+`latest` points at the last finished suite run where the filesystem
+supports a symlink.
+
+A verb gets a directory of its own for each invocation, and each worker
+process writes one file inside it. The default pool runs several workers,
+so a verb reads every file in its directory rather than one path.
+`DEPUG_OUTPUT_DIR` moves all of this somewhere else.
 
 ## Function id
 
@@ -190,7 +195,7 @@ A `call` record names one function entry.
 |---|---|---|
 | `type` | String | `call`. |
 | `fid` | String | The function id, complete with `#k`. |
-| `parent` | String or null | The id of the call that was active. |
+| `parent` | String or null | The id of the call that was executing when this one began. |
 | `path`, `line`, `column` | | Declaration position, TypeScript coordinates. |
 | `app` | Boolean | Inside the project, outside `node_modules`. |
 | `test` | String or null | The test window this happened in. |
@@ -201,6 +206,14 @@ either `return` or `throw`.
 A `suspend` record marks a call reaching an `await`. A `resume` record
 marks the same call continuing past it. Both carry `fid` and the position
 of the `await`.
+
+`parent` is read from a stack of executing calls: entry pushes, return
+pops. An `await` moves that boundary, so `suspend` pops the call and
+`resume` pushes it back, and a call entered while another one is suspended
+does not claim the suspended call as its caller. What this does not rebuild
+is a resumed call's own ancestors, which left the stack when it suspended.
+Read `parent` as "the call this one began inside", and read the index's
+order for anything more.
 
 **A suspend with no resume after it is not an error in the recording.**
 When an awaited value rejects, the run leaves through the rejection before

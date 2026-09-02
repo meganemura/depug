@@ -4,6 +4,7 @@
 // this plugin (see fixtures/basic/vitest.depug.config.ts for the pattern);
 // the project's config file itself never changes.
 import type { Plugin } from "vite";
+import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { instrumentSource } from "./transform.ts";
 
@@ -19,6 +20,12 @@ export interface DepugPluginOptions {
    * pass their own predicate.
    */
   include?: (id: string) => boolean;
+  /**
+   * Paths in a function id are written relative to this directory, so an
+   * id names a file the same way on every machine that has the
+   * repository. Defaults to the working directory the run started in.
+   */
+  root?: string;
 }
 
 const DEFAULT_INCLUDE = (id: string): boolean => {
@@ -30,6 +37,7 @@ const DEFAULT_INCLUDE = (id: string): boolean => {
 
 export function depugPlugin(options: DepugPluginOptions = {}): Plugin {
   const include = options.include ?? DEFAULT_INCLUDE;
+  const root = options.root ?? process.cwd();
 
   return {
     name: "depug",
@@ -46,7 +54,10 @@ export function depugPlugin(options: DepugPluginOptions = {}): Plugin {
     },
     transform(code, id) {
       if (!include(id)) return null;
-      const { code: instrumented } = instrumentSource(code, id);
+      // A vite module id is an absolute path. The id that reaches the
+      // evidence is relative, so two people reading the same artifact see
+      // the same names for the same functions.
+      const { code: instrumented } = instrumentSource(code, relative(root, id));
       // instrumentSource never re-prints the tree (see transform.ts), so
       // there is no coordinate remapping to describe: line and column are
       // the same literals a source map would otherwise exist to recover.

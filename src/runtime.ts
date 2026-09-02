@@ -11,6 +11,19 @@ export interface DepugEvent {
   column: number;
   exitKind?: ExitKind;
   test: string | null;
+  /**
+   * The call that was executing when this one was entered, present on
+   * `enter` only.
+   *
+   * JavaScript runs one call chain at a time, so the executing call is the
+   * top of a stack that entry pushes and exit pops. An `await` moves the
+   * boundary: a suspended call is not executing, so `suspend` pops it and
+   * `resume` pushes it back. What this does not rebuild is a resumed
+   * call's own ancestors, which left the stack when it suspended; a call
+   * entered after a resume names its immediate caller correctly, and the
+   * chain above that caller is only as deep as the resume restored.
+   */
+  parent?: string | null;
 }
 
 export interface DepugRuntime {
@@ -29,12 +42,22 @@ export interface DepugRuntime {
 export function createRuntime(): DepugRuntime {
   const events: DepugEvent[] = [];
   const callCounts = new Map<string, number>();
+  const executing: string[] = [];
   let currentTest: string | null = null;
 
   function enter(idPrefix: string, line: number, column: number): number {
     const callId = (callCounts.get(idPrefix) ?? 0) + 1;
     callCounts.set(idPrefix, callId);
-    events.push({ kind: "enter", fn: `${idPrefix}${callId}`, line, column, test: currentTest });
+    const fn = `${idPrefix}${callId}`;
+    events.push({
+      kind: "enter",
+      fn,
+      line,
+      column,
+      test: currentTest,
+      parent: executing.length === 0 ? null : executing[executing.length - 1],
+    });
+    executing.push(fn);
     return callId;
   }
 
@@ -45,15 +68,34 @@ export function createRuntime(): DepugRuntime {
     exitKind: ExitKind,
     callId: number,
   ): void {
-    events.push({ kind: "exit", fn: `${idPrefix}${callId}`, line, column, exitKind, test: currentTest });
+    const fn = `${idPrefix}${callId}`;
+    pop(fn);
+    events.push({ kind: "exit", fn, line, column, exitKind, test: currentTest });
+  }
+
+  // Removes one call from the executing stack. It is usually the top, but
+  // a rejected await leaves its own frame behind (the resume that would
+  // have popped it never ran), so this searches from the top rather than
+  // assuming.
+  function pop(fn: string): void {
+    for (let i = executing.length - 1; i >= 0; i--) {
+      if (executing[i] === fn) {
+        executing.splice(i, 1);
+        return;
+      }
+    }
   }
 
   function suspend(idPrefix: string, line: number, column: number, callId: number): void {
-    events.push({ kind: "suspend", fn: `${idPrefix}${callId}`, line, column, test: currentTest });
+    const fn = `${idPrefix}${callId}`;
+    pop(fn);
+    events.push({ kind: "suspend", fn, line, column, test: currentTest });
   }
 
   function resume<T>(idPrefix: string, line: number, column: number, callId: number, value: T): T {
-    events.push({ kind: "resume", fn: `${idPrefix}${callId}`, line, column, test: currentTest });
+    const fn = `${idPrefix}${callId}`;
+    executing.push(fn);
+    events.push({ kind: "resume", fn, line, column, test: currentTest });
     return value;
   }
 
@@ -68,6 +110,7 @@ export function createRuntime(): DepugRuntime {
   function reset(): void {
     events.length = 0;
     callCounts.clear();
+    executing.length = 0;
     currentTest = null;
   }
 
