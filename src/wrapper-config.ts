@@ -21,6 +21,11 @@ import { fileURLToPath } from "node:url";
 
 const PLUGIN_MODULE = fileURLToPath(new URL("./plugin.ts", import.meta.url));
 
+// depug's own package directory. vite refuses to serve a file outside the
+// project root unless it is on this list, and depug's setup file always is
+// outside: it lives wherever depug was installed.
+const DEPUG_DIR = fileURLToPath(new URL("..", import.meta.url));
+
 // vitest resolves these in order when no `--config` is given. depug looks
 // for the same ones so the wrapper starts from the config the project's
 // own run would have used.
@@ -180,33 +185,65 @@ export function writeGeneratedConfig(input: GeneratedConfigInput): Wrapper {
 
   // vitest does not apply a root config's `plugins` to a project's own
   // config, so merging the plugin into the root reaches none of the code
-  // under test. Naming the project inline, with its own config extended
-  // and its own directory as the root, puts the plugin where the code is
-  // and leaves every relative path in that config resolving as it did.
-  const project =
-    input.projectFor && declaresProjects(base)
-      ? findEnclosingProjectConfig(input.projectFor, input.cwd)
-      : undefined;
+  // under test. Two shapes of project-split repository need two answers.
+  const splitIntoProjects = Boolean(input.projectFor) && declaresProjects(base);
+  const project = splitIntoProjects
+    ? findEnclosingProjectConfig(input.projectFor!, input.cwd)
+    : undefined;
 
-  const added = project
-    ? [
-        "const added = defineConfig({",
-        "  test: {",
-        "    projects: [",
-        "      {",
-        `        extends: ${JSON.stringify(project.configPath)},`,
-        `        root: ${JSON.stringify(project.root)},`,
-        `        plugins: [${input.pluginExport}(${input.pluginOptions})],`,
-        "      },",
-        "    ],",
-        "  },",
-        "});",
-      ]
-    : [
-        "const added = defineConfig({",
-        `  plugins: [${input.pluginExport}(${input.pluginOptions})],`,
-        "});",
-      ];
+  const allow = `{ server: { fs: { allow: [${JSON.stringify(DEPUG_DIR)}, ${JSON.stringify(input.cwd)}] } } }`;
+  const pluginCall = `${input.pluginExport}(${input.pluginOptions})`;
+
+  let added: string[];
+  if (project) {
+    // The projects are directories or globs resolving to a config of their
+    // own. Naming just the one that owns the code, with its own config
+    // extended and its own directory as the root, puts the plugin where
+    // the code is and leaves every relative path in that config resolving
+    // as it did. Replacing the list rather than adding to it also keeps
+    // the other projects from running at all.
+    added = [
+      `const allow = ${allow};`,
+      "const added = defineConfig({",
+      "  ...allow,",
+      "  test: {",
+      "    projects: [",
+      "      {",
+      `        extends: ${JSON.stringify(project.configPath)},`,
+      `        root: ${JSON.stringify(project.root)},`,
+      "        ...allow,",
+      `        plugins: [${pluginCall}],`,
+      "      },",
+      "    ],",
+      "  },",
+      "});",
+    ];
+  } else if (splitIntoProjects) {
+    // The projects are written inline in this config, so there is no file
+    // to extend. Each one is rewritten to carry the plugin. A string entry
+    // is left alone: it names a config this branch has no handle on.
+    added = [
+      `const allow = ${allow};`,
+      `const plugin = ${pluginCall};`,
+      "const withPlugin = (entry) =>",
+      "  typeof entry === \"string\"",
+      "    ? entry",
+      "    : { ...entry, ...allow, plugins: [...(entry.plugins ?? []), plugin] };",
+      "const baseProjects = baseConfig.test?.projects ?? [];",
+      "const added = defineConfig({",
+      "  ...allow,",
+      "  test: { projects: baseProjects.map(withPlugin) },",
+      "});",
+    ];
+  } else {
+    added = [
+      `const allow = ${allow};`,
+      "const added = defineConfig({",
+      "  ...allow,",
+      `  plugins: [${pluginCall}],`,
+      "});",
+    ];
+  }
 
   const lines = [
     ...input.comment.map((line) => `// ${line}`),
@@ -218,7 +255,9 @@ export function writeGeneratedConfig(input: GeneratedConfigInput): Wrapper {
           "",
           ...added,
           "",
-          "export default mergeConfig(baseConfig, added);",
+          splitIntoProjects && !project
+        ? "export default { ...baseConfig, ...added, test: { ...baseConfig.test, ...added.test } };"
+        : "export default mergeConfig(baseConfig, added);",
         ]
       : ["", ...added, "", "export default added;"]),
   ];

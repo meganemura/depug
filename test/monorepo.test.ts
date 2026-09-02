@@ -56,3 +56,28 @@ describe("a verb against a project-split repository", () => {
     expect(result.envelope.exit_status).toBe(0);
   }, 120_000);
 });
+
+describe("projects written inline in the root config", () => {
+  // The other shape. There is no per-package config to extend, so the
+  // wrapper rewrites each inline project to carry the plugin instead.
+  const INLINE = fileURLToPath(new URL("../fixtures/monorepo-inline", import.meta.url));
+
+  it("reaches code in a project that has no config file of its own", () => {
+    expect(findEnclosingProjectConfig(`${INLINE}/packages/app/src`, INLINE)).toBeUndefined();
+
+    const result = runFrames({
+      command: [VITEST_BIN, "run"],
+      cwd: INLINE,
+      includePathPrefix: `${INLINE}/packages/app/src`,
+    });
+
+    const calls = readFileSync(result.files[0], "utf8")
+      .split("\n")
+      .filter((line) => line.trim() !== "")
+      .map((line) => JSON.parse(line))
+      .filter((r) => r.type === "call");
+
+    expect(calls.map((c) => c.fid)).toEqual(["packages/app/src/app.ts:double@1:17#1"]);
+    expect(result.envelope.exit_status).toBe(0);
+  }, 120_000);
+});

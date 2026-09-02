@@ -195,9 +195,13 @@ depug frames --include packages/zod/src -- npx vitest run "packages/zod/src/.../
 ```
 
 vitest does not apply a root config's plugins to a project's own config, so
-depug names that project inline instead, extending its config and keeping
-its own directory as the root. Every relative path in that config resolves
-where it did before.
+depug reaches the project itself. Where the projects resolve to a config
+per package, it names the one holding your code, extends that config, and
+keeps that package's directory as the root, so every relative path in it
+resolves where it did before. Where the projects are written inline in the
+root config, it rewrites each of them to carry the instrumentation.
+
+Verified against two real repositories of each shape.
 
 ## Test runners
 
