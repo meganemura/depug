@@ -264,11 +264,25 @@ including suspend and resume.
 
 One JSON object per line, for one call named by its id.
 
-The trace opens with a `call` record holding the entry arguments and every
-visible local in full. Each later `line` record carries only what changed.
+The trace opens with a `call` record naming the call and holding every
+visible local in full. At entry those locals are the parameters, so there
+is no separate field for the arguments: one field, and no chance of two
+that disagree.
 
 | Field | Type | Meaning |
 |---|---|---|
+| `type` | String | `call`. |
+| `fid` | String | The call this trace follows, with its `#k`. |
+| `path`, `line`, `column` | | The function's declaration, TypeScript coordinates. |
+| `locals` | Object | Every visible local at entry, rendered in full. |
+| `test` | String or null | The test window the call happened in. |
+
+Each later `line` record carries the source line and only what changed
+since the previous record.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `line` | Integer | The statement that just finished. |
 | `new` | Object | Locals that came into view, rendered. |
 | `changed` | Object | Updated locals, each with `old` and `new`. |
 | `out_of_scope` | Array of String | Locals that left a block. |
@@ -276,16 +290,23 @@ visible local in full. Each later `line` record carries only what changed.
 Apply `out_of_scope`, then `new`, then `changed`, in that order, to
 reconstruct what was visible at any line.
 
+**A `line` record is written after its statement finishes, so the records
+are in completion order rather than source order.** A statement holding
+other statements finishes last: an `if` on line 10 whose body is line 11
+records 11, then 10. Read the `line` field, not the position in the file.
+
 A `skipped_iterations` record replaces a loop's folded middle and carries
 the `count` of iterations dropped. The trace keeps the first and the last.
 Values inside the skipped iterations were not observed, and the marker
 declares that.
 
-`suspend` and `resume` records appear here too, with the same meaning as in
-the call index.
-
 A `throw` record carries the error name and rendered message. A `return`
 record carries the rendered value.
+
+v0.1 writes no `suspend` or `resume` record in a trace. The call index
+carries those, and following an `await` inside one traced call is left to
+a later version; a trace of an async function still records its statements
+and its return.
 
 Where the named call never happens, the trace holds no `call` record. The
 collector writes a `target_summary` record instead, and the envelope
@@ -444,6 +465,17 @@ arrives with the implementation that writes these files, and a project will
 be able to replace it. Patterns should favour redaction where a name is
 ambiguous: a pattern for `auth` also matching `author` withholds a value
 that was safe, which costs less than rendering one that was not.
+
+`flt`'s default pattern, matched case-insensitively against a name:
+
+```text
+pass(word|wd)?|secret|token|api[-_]?key|key|credential|auth|session|cookie
+```
+
+This withholds a name such as `password`, `apiKey`, `auth_token`, or
+`sessionId`. It also withholds `authorName`, on the same "favour redaction"
+principle above: `auth` matching `author` costs a value a reader has to ask
+for again, not one that leaked.
 
 ## Reading these files with jq
 

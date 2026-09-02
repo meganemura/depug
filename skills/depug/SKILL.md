@@ -94,6 +94,46 @@ jq -c 'select(.type == "call") | {fid, line}' frames-*.jsonl
 run reporting `depug calls: 0` instrumented nothing, which usually means
 the include path is wrong rather than that the test called nothing.
 
+## Follow one call statement by statement
+
+This is the verb that reaches a value. Take a `fid` from the index,
+complete with its `#k`:
+
+```sh
+depug flt "src/utils/url.ts:splitPath@8:14#1" -- npx vitest run "test/url.test.ts" -t "splits a path"
+```
+
+The trace opens with a `call` record holding every visible local in full,
+which at entry are the parameters. Each later `line` record carries only
+what changed:
+
+```text
+call  locals: {"path": {"value": "\"/a/b\""}}
+line   9  new: {"paths": {"value": "[\"\", \"a\", \"b\"]"}}
+line  11  changed: {"paths": {"old": "[\"\", \"a\", \"b\"]", "new": "[\"a\", \"b\"]"}}
+line  10  out_of_scope: []
+return    "[\"a\", \"b\"]"
+```
+
+Line 11 is where the leading empty segment disappeared. That is the answer
+`probe` cannot give, because `probe` reports the shape of a value and both
+arrays are the kind `array`.
+
+Two things to know while reading a trace:
+
+- **Records are in completion order, not source order.** A statement that
+  holds other statements finishes last, so an `if` on line 10 whose body is
+  line 11 records 11, then 10. Read the `line` field.
+- **A `skipped_iterations` record replaces a loop's folded middle.** The
+  trace keeps the first and last iteration; `count` says how many were
+  dropped, and those values were not observed.
+
+Reconstruct the visible locals at any point by applying `out_of_scope`,
+then `new`, then `changed`, in that order.
+
+Pass `--index <path>` to refuse the run if the index you took the `fid`
+from was built from different code than the working tree holds now.
+
 ## Compare a value against its declared type
 
 Use `probe` when one function defines the behaviour you are chasing, and
@@ -137,6 +177,9 @@ Treat these as absences the files declare, not as facts about the program.
   share one current-test pointer, so `test` on a record can name the wrong
   one. The call ids stay correct.
 - **`for await (const x of it)`** produces no suspend or resume.
+- **An `flt` trace carries no suspend or resume in v0.1.** Following an
+  `await` inside a traced call is left to a later version; the trace still
+  records the call's statements and its return.
 
 ## When not to use a verb
 

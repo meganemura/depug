@@ -10,8 +10,10 @@
 // free of the cost.
 import { resolve } from "node:path";
 import { writeJson } from "./evidence.ts";
+import { parseFid } from "./fid.ts";
 import { renderDeclared, renderObserved } from "./shape-report.ts";
 import { runFrames } from "./verbs/frames.ts";
+import { runFlt } from "./verbs/flt.ts";
 import { formatPreflight, runPreflight } from "./verbs/preflight.ts";
 import { runProbe } from "./verbs/probe.ts";
 
@@ -27,10 +29,14 @@ Verbs:
   preflight  -- <command>   Run the command twice and compare the calls
   probe <fid> -- <command>  Record what one function received and returned,
                             beside what it was declared to
+  flt <fid> -- <command>    Follow one call, named with its #k, and show how
+                            its locals changed statement by statement
 
 Options:
   --include <path>   Instrument files under this path (default: <cwd>/src)
   --cwd <path>       Run the command here (default: the current directory)
+  --index <path>     flt only: refuse if this frames index's code state
+                      does not match the working tree this run starts from
 
 The command is the rerun line a failure printed, for example:
   depug frames -- npx vitest run "test/user.test.ts" -t "parses a user"
@@ -43,6 +49,7 @@ interface ParsedArgs {
   operands: string[];
   include?: string;
   cwd?: string;
+  index?: string;
 }
 
 export function parseArgs(argv: readonly string[]): ParsedArgs | { error: string } {
@@ -59,6 +66,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs | { error: string
     const arg = before[i];
     if (arg === "--include") parsed.include = before[++i];
     else if (arg === "--cwd") parsed.cwd = before[++i];
+    else if (arg === "--index") parsed.index = before[++i];
     else if (arg.startsWith("--")) return { error: `unknown option: ${arg}` };
     else parsed.operands.push(arg);
   }
@@ -134,6 +142,47 @@ export function run(argv: readonly string[]): CliResult {
       }
     }
     lines.push(`depug result: ${describeExit(result.exitStatus)}`);
+    return { exitCode: 0, stdout: `${lines.join("\n")}\n` };
+  }
+
+  if (parsed.verb === "flt") {
+    if (parsed.operands.length === 0) {
+      return { exitCode: 2, stdout: `depug: flt needs a function id\n\n${USAGE}` };
+    }
+    const fidArg = parsed.operands[0];
+    const target = parseFid(fidArg);
+    if (!target || target.call === undefined) {
+      return {
+        exitCode: 2,
+        stdout: `depug: flt needs a complete function id, including #k (got ${fidArg})\n\n${USAGE}`,
+      };
+    }
+
+    const result = runFlt({
+      command: [...parsed.command],
+      cwd,
+      target: { ...target, call: target.call },
+      indexPath: parsed.index ? resolve(cwd, parsed.index) : undefined,
+    });
+
+    if (result.refused) {
+      const lines = ["depug flt: refused", `depug note: ${result.refused}`, "depug result: refused"];
+      return { exitCode: 1, stdout: `${lines.join("\n")}\n` };
+    }
+
+    const lines: string[] = [];
+    for (const file of result.files) lines.push(`depug flt: ${file}`);
+    if (result.codeStateWarning) lines.push(`depug note: ${result.codeStateWarning}`);
+    if (!result.envelope.traced) {
+      // A trace with no `call` record reads the same as one that never
+      // ran at all, unless the note says which #k was asked for and how
+      // many calls actually happened.
+      lines.push(
+        `depug note: call #${result.envelope.target_index} did not happen; ` +
+          `observed ${result.envelope.observed_calls} call(s) of this function`,
+      );
+    }
+    lines.push(`depug result: ${describeExit(result.envelope.exit_status)}`);
     return { exitCode: 0, stdout: `${lines.join("\n")}\n` };
   }
 
