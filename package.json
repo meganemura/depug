@@ -5,9 +5,23 @@
   "description": "Measure runtime values in TypeScript test runs instead of guessing them from source.",
   "license": "MIT",
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./reporter": "./src/reporter.ts",
+    "./plugin": "./src/plugin.ts",
+    "./package.json": "./package.json"
+  },
   "bin": {
     "depug": "./bin/depug.ts"
   },
+  "files": [
+    "bin",
+    "src",
+    "skills",
+    "docs",
+    "AGENTS.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "vitest run"
   },
