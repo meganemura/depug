@@ -7,6 +7,7 @@
 // literals"). Every inserted string is newline-free, so splicing can only
 // lengthen a line, never add or remove one.
 import ts from "typescript";
+import { functionIdentity, type NamedFunction } from "./function-identity.ts";
 
 export interface InstrumentedFunction {
   name: string;
@@ -42,14 +43,10 @@ interface CallFrame {
   idLiteral: string;
 }
 
-type InstrumentableNode =
-  | ts.FunctionDeclaration
-  | ts.FunctionExpression
-  | ts.MethodDeclaration
-  | ts.ArrowFunction
-  | ts.ConstructorDeclaration
-  | ts.GetAccessorDeclaration
-  | ts.SetAccessorDeclaration;
+// The naming and position rule lives in function-identity.ts, shared with
+// the probe rewrite, so the two cannot drift into disagreeing about what
+// one function is called.
+type InstrumentableNode = NamedFunction;
 
 function isInstrumentableFunction(node: ts.Node): node is InstrumentableNode {
   if (
@@ -73,49 +70,6 @@ function isInstrumentableFunction(node: ts.Node): node is InstrumentableNode {
 /** True for an arrow written as `() => x`, which has no block to splice into. */
 function hasExpressionBody(node: InstrumentableNode): node is ts.ArrowFunction {
   return ts.isArrowFunction(node) && !ts.isBlock(node.body);
-}
-
-// Finds the identifier that names a function, walking up to the enclosing
-// variable or property when the function itself is anonymous (`const f =
-// () => {}`). Returns undefined for a genuinely anonymous function, which
-// falls back to a synthetic name below.
-function findNameNode(node: InstrumentableNode): ts.Identifier | undefined {
-  if ((ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)) && node.name) {
-    return node.name;
-  }
-  if (
-    (ts.isMethodDeclaration(node) || ts.isGetAccessor(node) || ts.isSetAccessor(node)) &&
-    ts.isIdentifier(node.name)
-  ) {
-    return node.name;
-  }
-  const parent = node.parent;
-  if (parent && ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
-    return parent.name;
-  }
-  if (
-    parent &&
-    (ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent)) &&
-    ts.isIdentifier(parent.name)
-  ) {
-    return parent.name;
-  }
-  return undefined;
-}
-
-function functionDisplayName(node: InstrumentableNode, nameNode: ts.Identifier | undefined): string {
-  if (nameNode) return nameNode.text;
-  // A constructor has no name of its own, but "constructor" reads better
-  // in an index than the fallback, and the class it belongs to is already
-  // visible from the path and line.
-  if (ts.isConstructorDeclaration(node)) return "constructor";
-  if (
-    (ts.isMethodDeclaration(node) || ts.isGetAccessor(node) || ts.isSetAccessor(node)) &&
-    !ts.isIdentifier(node.name)
-  ) {
-    return "<computed>";
-  }
-  return "<anonymous>";
 }
 
 // depug records 1-based line and column, matching the position an editor
@@ -173,11 +127,8 @@ export function instrumentSource(source: string, fileId: string): InstrumentResu
 
   function visit(node: ts.Node): void {
     if (isInstrumentableFunction(node)) {
-      const nameNode = findNameNode(node);
-      const name = functionDisplayName(node, nameNode);
-      const posNode: ts.Node = nameNode ?? node;
-      const { line, column } = toLineColumn(sourceFile, posNode.getStart(sourceFile));
-      const idPrefix = `${fileId}:${name}@${line}:${column}#`;
+      const { name, line, column, id } = functionIdentity(node, sourceFile, fileId);
+      const idPrefix = `${id}#`;
       functions.push({ name, idPrefix, line, column });
 
       const idLiteral = JSON.stringify(idPrefix);

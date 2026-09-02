@@ -14,6 +14,7 @@
 // it never recurses into a nested object's own properties. A nested
 // object reports as the kind "object" and nothing more.
 import ts from "typescript";
+import { functionIdentity, type NamedFunction } from "./function-identity.ts";
 
 /** A primitive kind name, or "object"/"array"/"function" for the rest. */
 export type Kind =
@@ -151,6 +152,63 @@ export function declaredSignatureOf(
 
   return {
     name: functionName,
+    parameters: found.parameters.map((parameter) => ({
+      name: parameter.name.getText(sourceFile),
+      type: projectType(checker, checker.getTypeAtLocation(parameter), parameter),
+    })),
+    returnType: projectType(checker, signature.getReturnType(), found),
+  };
+}
+
+/**
+ * Reads the declared signature of the function a depug id names.
+ *
+ * The lookup goes by id rather than by name because a name does not
+ * identify a function on its own: an anonymous arrow has none, and a file
+ * can hold several functions sharing one. `fileId` must be written the
+ * same way the id writes it, which is relative to the project root.
+ *
+ * Returns undefined where the file holds no function at that position,
+ * rather than throwing: an id from an index built before an edit should
+ * come back as an absence the caller can report.
+ */
+export function declaredSignatureAtId(
+  program: ts.Program,
+  fileName: string,
+  fileId: string,
+  targetId: string,
+): DeclaredSignature | undefined {
+  const sourceFile = program.getSourceFile(fileName);
+  if (!sourceFile) return undefined;
+  const checker = program.getTypeChecker();
+
+  let found: NamedFunction | undefined;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (
+      (ts.isFunctionDeclaration(node) ||
+        ts.isFunctionExpression(node) ||
+        ts.isMethodDeclaration(node) ||
+        ts.isArrowFunction(node) ||
+        ts.isConstructorDeclaration(node) ||
+        ts.isGetAccessor(node) ||
+        ts.isSetAccessor(node)) &&
+      node.body !== undefined &&
+      functionIdentity(node, sourceFile, fileId).id === targetId
+    ) {
+      found = node;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  if (!found) return undefined;
+
+  const signature = checker.getSignatureFromDeclaration(found);
+  if (!signature) return undefined;
+
+  return {
+    name: functionIdentity(found, sourceFile, fileId).name,
     parameters: found.parameters.map((parameter) => ({
       name: parameter.name.getText(sourceFile),
       type: projectType(checker, checker.getTypeAtLocation(parameter), parameter),

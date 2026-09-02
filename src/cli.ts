@@ -9,8 +9,11 @@
 // a process only when invoked, which is what keeps the always-on layer
 // free of the cost.
 import { resolve } from "node:path";
+import { writeJson } from "./evidence.ts";
+import { renderDeclared, renderObserved } from "./shape-report.ts";
 import { runFrames } from "./verbs/frames.ts";
 import { formatPreflight, runPreflight } from "./verbs/preflight.ts";
+import { runProbe } from "./verbs/probe.ts";
 
 export interface CliResult {
   exitCode: number;
@@ -22,6 +25,8 @@ const USAGE = `depug <verb> [options] -- <command...>
 Verbs:
   frames     -- <command>   Index every application call one test makes
   preflight  -- <command>   Run the command twice and compare the calls
+  probe <fid> -- <command>  Record what one function received and returned,
+                            beside what it was declared to
 
 Options:
   --include <path>   Instrument files under this path (default: <cwd>/src)
@@ -34,6 +39,8 @@ The command is the rerun line a failure printed, for example:
 interface ParsedArgs {
   verb: string;
   command: string[];
+  /** Positional arguments the verb takes before its options. */
+  operands: string[];
   include?: string;
   cwd?: string;
 }
@@ -47,12 +54,13 @@ export function parseArgs(argv: readonly string[]): ParsedArgs | { error: string
   if (before.length === 0) return { error: "no verb was given" };
   if (command.length === 0) return { error: "no command followed `--`" };
 
-  const parsed: ParsedArgs = { verb: before[0], command };
+  const parsed: ParsedArgs = { verb: before[0], command, operands: [] };
   for (let i = 1; i < before.length; i++) {
     const arg = before[i];
     if (arg === "--include") parsed.include = before[++i];
     else if (arg === "--cwd") parsed.cwd = before[++i];
-    else return { error: `unknown option: ${arg}` };
+    else if (arg.startsWith("--")) return { error: `unknown option: ${arg}` };
+    else parsed.operands.push(arg);
   }
   return parsed;
 }
@@ -95,6 +103,38 @@ export function run(argv: readonly string[]): CliResult {
   if (parsed.verb === "preflight") {
     const result = runPreflight(input);
     return { exitCode: 0, stdout: `${formatPreflight(result)}\n` };
+  }
+
+  if (parsed.verb === "probe") {
+    if (parsed.operands.length === 0) {
+      return { exitCode: 2, stdout: `depug: probe needs a function id\n\n${USAGE}` };
+    }
+    const result = runProbe({ command: [...parsed.command], cwd, targets: parsed.operands });
+    const path = resolve(cwd, "tmp", "depug", `probe-${process.pid}.json`);
+    writeJson(path, result.output);
+
+    const lines = [`depug probe: ${path}`];
+    for (const id of result.output.targets_not_found) {
+      // An id that matched nothing is the one failure a reader cannot see
+      // from the file alone, because the file then has nothing in it.
+      lines.push(`depug note: no function in the source has the id ${id}`);
+    }
+    for (const [id, fn] of Object.entries(result.output.functions)) {
+      lines.push(`${id}  calls: ${fn.calls}, threw: ${fn.threw}`);
+      lines.push(`  observed: ${renderObserved(fn.returns.observed)}`);
+      lines.push(
+        `  declared: ${fn.returns.declared ? renderDeclared(fn.returns.declared) : "(not read)"}`,
+      );
+      for (const mismatch of fn.returns.mismatches) {
+        const where = mismatch.property === "" ? "return value" : mismatch.property;
+        lines.push(
+          `  mismatch: ${where} was ${mismatch.observed}, declared ${mismatch.declared}` +
+            ` (${mismatch.occurrences} of ${mismatch.samples} calls)`,
+        );
+      }
+    }
+    lines.push(`depug result: ${describeExit(result.exitStatus)}`);
+    return { exitCode: 0, stdout: `${lines.join("\n")}\n` };
   }
 
   return { exitCode: 2, stdout: `depug: unknown verb: ${parsed.verb}\n\n${USAGE}` };
