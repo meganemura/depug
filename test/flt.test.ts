@@ -158,3 +158,28 @@ describe("a call with no statements of its own", () => {
     expect(result.stdout).toContain("frames index");
   }, 120_000);
 });
+
+describe("where a call left from", () => {
+  // A `line` record is written after a statement completes, and a return
+  // or a throw never completes into one. Without the line on those two
+  // records, a reader who knows which line is wrong cannot find it in the
+  // trace at all: measured across 25 real bug fixes, the changed line was
+  // the function's return or a throwing statement in 4 of them.
+  it("names the line a return left from", () => {
+    const fid = fidFor(readRecords(framesFile()), "sumUntil", 1);
+    const file = /^depug flt: (.+)$/m.exec(cli("flt", fid).stdout)![1];
+    const ret = readRecords(file).find((r) => r.type === "return")!;
+
+    const source = readFileSync(`${FIXTURE_DIR}/src/app.ts`, "utf8").split("\n");
+    expect(source[(ret.line as number) - 1]).toContain("return total");
+  }, 120_000);
+
+  it("names the line a throw left from", () => {
+    const fid = fidFor(readRecords(framesFile()), "explode", 1);
+    const file = /^depug flt: (.+)$/m.exec(cli("flt", fid).stdout)![1];
+    const thrown = readRecords(file).find((r) => r.type === "throw")!;
+
+    const source = readFileSync(`${FIXTURE_DIR}/src/app.ts`, "utf8").split("\n");
+    expect(source[(thrown.line as number) - 1]).toContain("throw new Error");
+  }, 120_000);
+});

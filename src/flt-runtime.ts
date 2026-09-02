@@ -41,12 +41,25 @@ export interface FltSkippedIterationsRecord {
 export interface FltReturnRecord {
   type: "return";
   fid: string;
+  /**
+   * The `return` statement's own line, absent where the function fell off
+   * its end. A reader looking for the line a value came from needs it
+   * here: a `line` record is written after a statement completes, and a
+   * `return` never completes into one.
+   */
+  line?: number;
   value: RenderedValue;
 }
 
 export interface FltThrowRecord {
   type: "throw";
   fid: string;
+  /**
+   * The `throw` statement's own line, present only where this function
+   * threw it. An exception raised by something this function called
+   * carries no line here, because this frame never named one.
+   */
+  line?: number;
   name: string;
   message: RenderedValue;
 }
@@ -102,7 +115,14 @@ export interface FltCallHandle {
   loopIterStart(): void;
   loopExit(): void;
   /** Wraps a `return <expr>` so the value is known before the value leaves the frame. */
-  ret<T>(value: T): T;
+  /** `line` is the return statement's own line, where the caller knows it. */
+  ret<T>(value: T, line?: number): T;
+  /**
+   * Notes the line of a `throw` this function is about to perform, so the
+   * throw record can say where. An exception from something this function
+   * called never reaches here, and its record carries no line.
+   */
+  throwAt(line: number): void;
   /** Called from the function's own finally clause. A no-op once `ret` already settled the call. */
   exit(kind: FltExitKind, error: unknown): void;
 }
@@ -147,6 +167,10 @@ export function createFltRuntime(targetK: number, limits: FltLimits): FltRuntime
     const loopStack: LoopFrame[] = [];
     let lastEmitted = new Map<string, RenderedValue>();
     let settled = false;
+    // Set by the last `throw` statement this function reached, so the exit
+    // record can name the line. Stays undefined for an exception raised by
+    // something this function called.
+    let throwLine: number | undefined;
 
     // The single choke point every recorded event passes through. A loop
     // frame currently folding its middle absorbs the event instead of
@@ -223,7 +247,10 @@ export function createFltRuntime(targetK: number, limits: FltLimits): FltRuntime
         if (!tracing) return;
         resolveFrame(loopStack.pop()!);
       },
-      ret(value) {
+      throwAt(line) {
+        if (tracing) throwLine = line;
+      },
+      ret(value, line) {
         if (!tracing) return value;
         // A `return` inside a loop leaves before that loop's own loopExit
         // marker runs, so whatever iteration was still pending there has
@@ -231,7 +258,7 @@ export function createFltRuntime(targetK: number, limits: FltLimits): FltRuntime
         // return record is written.
         flushLoops();
         settled = true;
-        records.push({ type: "return", fid, value: renderValue(value, limits) });
+        records.push({ type: "return", fid, line, value: renderValue(value, limits) });
         return value;
       },
       exit(kind, error) {
@@ -241,7 +268,13 @@ export function createFltRuntime(targetK: number, limits: FltLimits): FltRuntime
         if (kind === "throw") {
           const name = error instanceof Error ? error.name : "Error";
           const message = error instanceof Error ? error.message : String(error);
-          records.push({ type: "throw", fid, name, message: renderValue(message, limits) });
+          records.push({
+            type: "throw",
+            fid,
+            line: throwLine,
+            name,
+            message: renderValue(message, limits),
+          });
         } else {
           // Falling off the end with no `return` statement returns
           // undefined; `ret` never ran, so this is the only place that

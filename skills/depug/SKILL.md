@@ -126,7 +126,13 @@ Line 11 is where the leading empty segment disappeared. That is the answer
 `probe` cannot give, because `probe` reports the shape of a value and both
 arrays are the kind `array`.
 
-Two things to know while reading a trace:
+Three things to know while reading a trace:
+
+- **A statement that leaves the function produces no `line` record.** A
+  record is written after a statement completes, and a return, a throw, a
+  `break` or a `continue` never completes into one. The `return` and
+  `throw` records carry the line they left from; look there. A statement
+  spread over several lines reports its first line.
 
 - **Records are in completion order, not source order.** A statement that
   holds other statements finishes last, so an `if` on line 10 whose body is

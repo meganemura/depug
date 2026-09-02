@@ -259,13 +259,17 @@ export function instrumentTarget(source: string, fileId: string, target: FltTarg
     // becomes `return <call>.ret(undefined);`. Either way the value is
     // known before it leaves the frame, which the function's own
     // finally/catch, wrapped around the whole body, cannot see on its own.
+    // The statement's own line rides along, because a `return` never
+    // completes into a `line` record and a reader looking for the line a
+    // value came from would otherwise find nothing.
+    const { line } = toLineColumn(sourceFile, stmt.getStart(sourceFile));
     if (stmt.expression) {
       insertAt(stmt.expression.getStart(sourceFile), `${callVar}.ret((`);
-      insertAt(stmt.expression.end, `))`);
+      insertAt(stmt.expression.end, `),${line})`);
     } else {
       // "return" is always exactly 6 characters; a leading space keeps the
       // inserted identifier from fusing with the keyword.
-      insertAt(stmt.getStart(sourceFile) + "return".length, ` ${callVar}.ret(undefined)`);
+      insertAt(stmt.getStart(sourceFile) + "return".length, ` ${callVar}.ret(undefined,${line})`);
     }
   }
 
@@ -351,6 +355,11 @@ export function instrumentTarget(source: string, fileId: string, target: FltTarg
       // or class value is not a statement-lifetime local worth showing),
       // and its body is not walked: a different frame, per the module
       // header.
+    } else if (ts.isThrowStatement(stmt)) {
+      // Noted before the throw runs, because after it nothing in this
+      // frame does.
+      const { line } = toLineColumn(sourceFile, stmt.getStart(sourceFile));
+      insertAt(stmt.getStart(sourceFile), `${callVar}.throwAt(${line});`);
     } else if (ts.isTryStatement(stmt)) {
       processTry(stmt);
     } else if (ts.isSwitchStatement(stmt)) {

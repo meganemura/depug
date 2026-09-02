@@ -307,7 +307,16 @@ Values inside the skipped iterations were not observed, and the marker
 declares that.
 
 A `throw` record carries the error name and rendered message. A `return`
-record carries the rendered value.
+record carries the rendered value. Both carry the `line` they left from,
+which is the one place to look for it: a `line` record is written after a
+statement completes, and a statement that returns or throws never
+completes into one. A `throw` raised by something the traced function
+called carries no line, because this frame never named one.
+
+For the same reason, a statement that jumps away -- `break`, `continue`,
+or a `return` inside a branch -- produces no `line` record either. The
+trace shows where control went, not a record for every line the file
+holds. A statement spread over several lines reports its first line.
 
 v0.1 writes no `suspend` or `resume` record in a trace. The call index
 carries those, and following an `await` inside one traced call is left to
