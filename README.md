@@ -8,8 +8,8 @@ An agent debugging a failed test usually infers what a value was from the
 code around it. depug reruns the test with instrumentation and reports what
 the value actually was.
 
-Requires Node and vitest. Development used Node v26.7.0, vitest 4.1.11, and
-typescript 6.0.3.
+Works with vitest and with Node's own test runner. Development used Node
+v26.7.0, vitest 4.1.11, and typescript 6.0.3.
 
 ## Install
 
@@ -184,11 +184,29 @@ with four million trivial calls.
 Instrumenting one project's whole suite ran 4961 tests to the same result
 as without it, in 14.31 s against a 14 s baseline.
 
+## Test runners
+
+The verbs read the command you hand them and set themselves up
+accordingly:
+
+```sh
+depug frames -- npx vitest run "test/user.test.ts" -t "^parses a user$"
+depug frames -- node --test test/user.test.ts
+```
+
+The instrumentation is the same either way, because depug rewrites
+TypeScript before it executes rather than hooking a runner. vitest owns
+that step through a vite plugin; Node owns it through
+`module.registerHooks`, which the verbs reach with `NODE_OPTIONS`. The ids,
+the coordinates, and the files are identical.
+
+Under node:test the reporter is not wired yet, so a failure prints no
+evidence lines there. Point a verb at the failing test by hand.
+
 ## Scope of version 0.1
 
-vitest, on Node. node:test and jest come later. The files are the
-interface, and [the evidence schema](docs/evidence-schema.md) is the
-contract. [The design decisions](docs/design-decisions.md) explain each
+vitest and node:test. jest comes later. The files are the interface, and
+[the evidence schema](docs/evidence-schema.md) is the contract. [The design decisions](docs/design-decisions.md) explain each
 choice with the measurement behind it.
 
 The [bundled skill](skills/depug/SKILL.md) tells an agent how to read all

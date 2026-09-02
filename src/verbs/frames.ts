@@ -7,11 +7,12 @@
 // is why nothing builds it until a verb is invoked.
 import { appendFileSync, mkdirSync, mkdtempSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { readCodeState, type CodeState } from "../code-state.ts";
 import { readWorkerFiles, type FrameRecord } from "../collector.ts";
 import { SCHEMA_VERSION } from "../evidence.ts";
 import { applyConfigArgument, writeWrapperConfig } from "../wrapper-config.ts";
+import { detectRunner, withNodeTestHook, type Runner } from "../runner.ts";
 
 export interface FramesEnvelope {
   type: "envelope";
@@ -65,6 +66,8 @@ export interface RunFramesInput {
   cwd: string;
   /** Files under this prefix are instrumented; the application boundary. */
   includePathPrefix: string;
+  /** Detected from the command when not given. */
+  runner?: Runner;
   /**
    * Where the worker files go. The default puts them beside the failure
    * snapshots, under the project's own `tmp/depug`, so everything one
@@ -84,13 +87,18 @@ export interface RunFramesInput {
  */
 export function runFrames(input: RunFramesInput): FramesResult {
   const framesDir = input.framesDir ?? freshFramesDir(input.cwd);
-  const wrapper = writeWrapperConfig({
-    cwd: input.cwd,
-    includePathPrefix: input.includePathPrefix,
-  });
+  const runner = input.runner ?? detectRunner(input.command);
+
+  // node:test has no config to wrap: Node owns the transform step itself,
+  // so the command goes through untouched and the hook arrives by
+  // NODE_OPTIONS.
+  const wrapper =
+    runner === "vitest"
+      ? writeWrapperConfig({ cwd: input.cwd, includePathPrefix: input.includePathPrefix })
+      : undefined;
 
   const [bin, ...rest] = input.command;
-  const { args } = applyConfigArgument(rest, wrapper.configPath);
+  const args = wrapper ? applyConfigArgument(rest, wrapper.configPath).args : [...rest];
 
   const env: Record<string, string | undefined> = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -100,6 +108,11 @@ export function runFrames(input: RunFramesInput): FramesResult {
     env[key] = value;
   }
   env.DEPUG_FRAMES_DIR = framesDir;
+  if (runner === "node") {
+    env.NODE_OPTIONS = withNodeTestHook(env.NODE_OPTIONS);
+    env.DEPUG_ROOT = input.cwd;
+    env.DEPUG_INCLUDE = relative(input.cwd, input.includePathPrefix);
+  }
   // The child is a re-execution, not the suite. Its own failures are the
   // point, and a second set of snapshot files would only add noise.
   env.DEPUG_DISABLE = "1";
@@ -115,7 +128,7 @@ export function runFrames(input: RunFramesInput): FramesResult {
   } finally {
     // The generated config has done its work once the child has read it.
     // Leaving it behind would let a stale one be picked up by a later glob.
-    wrapper.cleanup();
+    wrapper?.cleanup();
   }
 
   const workerFiles = readWorkerFiles(framesDir);

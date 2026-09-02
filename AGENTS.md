@@ -35,7 +35,7 @@ next section records those and what each one measured.
 - **The always-on layer records failure text only in v0.1.** The evidence file holds the test name, the error, the stack in TypeScript coordinates, the rerun command, and the code state. It does not hold locals. A locals capture mode can come later without a change to the schema contract.
 - **Declared types are a column from v0.1.** `probe` and `flt` show the observed shape of values next to the declared type. The declared type comes from the TypeScript compiler API at transform time as a shallow projection: property names, primitive kinds, optional, and null. depug does not run a full validator.
 - **The verbs are the same as bulldogger.** `snap` (always on), `frames`, `preflight`, `flt`, `exec`, `probe`. A function id is `path:name@line:column#k`, where the position is the function's declaration in the TypeScript source and `k` counts entries of that function inside one test window.
-- **vitest first.** node:test comes next through `module.registerHooks()`. jest comes after that through its transform setting.
+- **vitest first, then node:test.** Both are supported in v0.1: vitest through a vite plugin, node:test through `module.registerHooks()` reached by `NODE_OPTIONS`. The transforms are shared. jest comes after, through its transform setting.
 - **The parser is `typescript`, versions 5.5.4 through 6.x.** It is the language vendor's parser. Speed matters less because the transform targets one file or one function per rerun. TypeScript 7 is a separate decision, recorded below.
 - **Distribution is one npm package plus one bundled skill.** Files (JSON, JSONL) are the primary API. The schema is the public contract.
 

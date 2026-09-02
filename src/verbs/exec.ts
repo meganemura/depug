@@ -19,6 +19,7 @@ import { parseFid } from "../fid.ts";
 import { EXEC_TOKEN, type ExecRecord } from "../exec-runtime.ts";
 import { writeExecWrapperConfig } from "../exec-wrapper-config.ts";
 import { applyConfigArgument } from "../wrapper-config.ts";
+import { detectRunner, withNodeTestHook, type Runner } from "../runner.ts";
 
 export interface ExecEnvelope {
   type: "envelope";
@@ -46,6 +47,8 @@ export interface RunExecInput {
   expression: string;
   command: string[];
   cwd: string;
+  /** Detected from the command when not given. */
+  runner?: Runner;
   timeoutMs?: number;
 }
 
@@ -73,18 +76,22 @@ export function runExec(input: RunExecInput): ExecResult {
   mkdirSync(base, { recursive: true });
   const execDir = mkdtempSync(join(base, "exec-"));
 
-  const wrapper = writeExecWrapperConfig({
-    cwd: input.cwd,
-    targetPath: parsed.path,
-    targetName: parsed.name,
-    targetLine: parsed.line,
-    targetColumn: parsed.column,
-    atLine: input.atLine,
-    expression: input.expression,
-  });
+  const runner = input.runner ?? detectRunner(input.command);
+  const wrapper =
+    runner === "vitest"
+      ? writeExecWrapperConfig({
+          cwd: input.cwd,
+          targetPath: parsed.path,
+          targetName: parsed.name,
+          targetLine: parsed.line,
+          targetColumn: parsed.column,
+          atLine: input.atLine,
+          expression: input.expression,
+        })
+      : undefined;
 
   const [bin, ...rest] = input.command;
-  const { args } = applyConfigArgument(rest, wrapper.configPath);
+  const args = wrapper ? applyConfigArgument(rest, wrapper.configPath).args : [...rest];
 
   const env: Record<string, string | undefined> = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -99,6 +106,11 @@ export function runExec(input: RunExecInput): ExecResult {
   env.DEPUG_DISABLE = "1";
   // The one place the injection is armed.
   env[EXEC_TOKEN] = "1";
+  if (runner === "node") {
+    env.NODE_OPTIONS = withNodeTestHook(env.NODE_OPTIONS);
+    env.DEPUG_ROOT = input.cwd;
+    env.DEPUG_EXEC_STATEMENT = input.expression;
+  }
 
   let child;
   try {
@@ -109,7 +121,7 @@ export function runExec(input: RunExecInput): ExecResult {
       timeout: input.timeoutMs ?? 120_000,
     });
   } finally {
-    wrapper.cleanup();
+    wrapper?.cleanup();
   }
 
   let file: string | null = null;

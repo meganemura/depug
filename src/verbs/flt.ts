@@ -18,6 +18,7 @@ import { readFltWorkerFiles, type FltWorkerFile } from "../flt-collector.ts";
 import type { FltRecord } from "../flt-runtime.ts";
 import { writeFltWrapperConfig } from "../flt-wrapper-config.ts";
 import { applyConfigArgument } from "../wrapper-config.ts";
+import { detectRunner, withNodeTestHook } from "../runner.ts";
 
 export interface FltEnvelope {
   type: "envelope";
@@ -127,7 +128,8 @@ export function runFlt(input: RunFltInput): FltResult {
   }
 
   const fltDir = input.fltDir ?? freshFltDir(input.cwd);
-  const wrapper = writeFltWrapperConfig({
+  const runner = detectRunner(input.command);
+  const wrapper = runner === "node" ? undefined : writeFltWrapperConfig({
     cwd: input.cwd,
     target: {
       path: input.target.path,
@@ -138,7 +140,7 @@ export function runFlt(input: RunFltInput): FltResult {
   });
 
   const [bin, ...rest] = input.command;
-  const { args } = applyConfigArgument(rest, wrapper.configPath);
+  const args = wrapper ? applyConfigArgument(rest, wrapper.configPath).args : [...rest];
 
   const env: Record<string, string | undefined> = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -150,6 +152,14 @@ export function runFlt(input: RunFltInput): FltResult {
   env.DEPUG_FLT_DIR = fltDir;
   env.DEPUG_FLT_TARGET_K = String(input.target.call);
   env.DEPUG_DISABLE = "1";
+  if (runner === "node") {
+    env.NODE_OPTIONS = withNodeTestHook(env.NODE_OPTIONS);
+    env.DEPUG_ROOT = input.cwd;
+    env.DEPUG_FLT_PATH = input.target.path;
+    env.DEPUG_FLT_NAME = input.target.name;
+    env.DEPUG_FLT_LINE = String(input.target.line);
+    env.DEPUG_FLT_COLUMN = String(input.target.column);
+  }
 
   let child;
   try {
@@ -160,7 +170,7 @@ export function runFlt(input: RunFltInput): FltResult {
       timeout: input.timeoutMs ?? 120_000,
     });
   } finally {
-    wrapper.cleanup();
+    wrapper?.cleanup();
   }
 
   const workerFiles = readFltWorkerFiles(fltDir);

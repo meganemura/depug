@@ -25,6 +25,7 @@ import type { ObservedShape } from "../observed-shape.ts";
 import type { ProbeFunctionRecord, ProbePosition } from "../probe-runtime.ts";
 import type { ProbeTarget } from "../probe-transform.ts";
 import { applyConfigArgument } from "../wrapper-config.ts";
+import { detectRunner, withNodeTestHook, type Runner } from "../runner.ts";
 import { writeProbeWrapperConfig } from "./probe-config.ts";
 
 export interface ProbeColumn {
@@ -58,6 +59,8 @@ export interface RunProbeInput {
   command: string[];
   cwd: string;
   targets: string[];
+  /** Detected from the command when not given. */
+  runner?: Runner;
   timeoutMs?: number;
 }
 
@@ -131,9 +134,10 @@ export function runProbe(input: RunProbeInput): ProbeResult {
   mkdirSync(base, { recursive: true });
   const probeDir = mkdtempSync(join(base, "probe-"));
 
-  const wrapper = writeProbeWrapperConfig({ cwd: input.cwd, targets });
+  const runner = input.runner ?? detectRunner(input.command);
+  const wrapper = runner === "vitest" ? writeProbeWrapperConfig({ cwd: input.cwd, targets }) : undefined;
   const [bin, ...rest] = input.command;
-  const { args } = applyConfigArgument(rest, wrapper.configPath);
+  const args = wrapper ? applyConfigArgument(rest, wrapper.configPath).args : [...rest];
 
   const env: Record<string, string | undefined> = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -142,6 +146,11 @@ export function runProbe(input: RunProbeInput): ProbeResult {
   }
   env.DEPUG_PROBE_DIR = probeDir;
   env.DEPUG_DISABLE = "1";
+  if (runner === "node") {
+    env.NODE_OPTIONS = withNodeTestHook(env.NODE_OPTIONS);
+    env.DEPUG_ROOT = input.cwd;
+    env.DEPUG_PROBE_TARGETS = JSON.stringify(targets);
+  }
 
   let child;
   try {
@@ -152,7 +161,7 @@ export function runProbe(input: RunProbeInput): ProbeResult {
       timeout: input.timeoutMs ?? 120_000,
     });
   } finally {
-    wrapper.cleanup();
+    wrapper?.cleanup();
   }
 
   const observations = readAll<Record<string, ProbeFunctionRecord>>(probeDir, "probe-");

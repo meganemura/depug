@@ -32,6 +32,11 @@ file can answer:
 depug never runs the rerun command for you. Every verb below starts a
 process only when you invoke it.
 
+The verbs read whichever runner your command names, so `-- node --test
+path/to/file.test.ts` works the same way a vitest command does. Under
+node:test the failure output above is not wired yet: aim a verb at the
+failing test by hand there.
+
 ## Read the snapshot
 
 ```sh
