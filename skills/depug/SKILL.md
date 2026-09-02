@@ -145,11 +145,19 @@ depug probe "src/user.ts:parseUser@12:17" -- npx vitest run "test/user.test.ts" 
 
 ```text
 src/user.ts:parseUser@12:17  calls: 5, threw: 0
+  raw: "{\"id\": \"1\"}", "{\"email\": \"a@example.com\", \"id\": \"2\"}", …
+  returns: {id: "1"}, {email: "a@example.com", id: "2"}, …
   observed: {id: string, email: undefined (3 / 5 calls) | string (2 / 5 calls)}
   declared: {email: string, id: number}
   mismatch: id was string, declared number (5 of 5 calls)
   mismatch: email was absent, declared string (3 of 5 calls)
 ```
+
+**Reach for this before `flt` when a function was called several times and
+you do not know which call went wrong.** One probe run lists every call's
+arguments and return beside each other, so you can see which one differs,
+then trace only that `#k`. Tracing them one at a time to find out costs a
+process each.
 
 A probe target omits `#k`: it observes every call, not one of them.
 

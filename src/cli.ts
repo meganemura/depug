@@ -142,6 +142,13 @@ export function run(argv: readonly string[]): CliResult {
     }
     for (const [id, fn] of Object.entries(result.output.functions)) {
       lines.push(`${id}  calls: ${fn.calls}, threw: ${fn.threw}`);
+      // The values come before the shapes: chasing a wrong value among
+      // several calls is what a reader most often opens a probe for, and
+      // the shapes can agree while the values differ.
+      for (const parameter of fn.parameters) {
+        lines.push(`  ${parameter.name}: ${formatSamples(parameter.samples, parameter.samples_omitted)}`);
+      }
+      lines.push(`  returns: ${formatSamples(fn.returns.samples, fn.returns.samples_omitted)}`);
       lines.push(`  observed: ${renderObserved(fn.returns.observed)}`);
       lines.push(
         `  declared: ${fn.returns.declared ? renderDeclared(fn.returns.declared) : "(not read)"}`,
@@ -221,6 +228,13 @@ export function run(argv: readonly string[]): CliResult {
   }
 
   return { exitCode: 2, stdout: `depug: unknown verb: ${parsed.verb}\n\n${USAGE}` };
+}
+
+/** A short list of values, with a count of the ones past the cap. */
+function formatSamples(samples: readonly string[], omitted: number): string {
+  if (samples.length === 0) return "(none)";
+  const shown = samples.join(", ");
+  return omitted > 0 ? `${shown}, … (${omitted} more)` : shown;
 }
 
 function describeExit(status: number | null): string {

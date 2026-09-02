@@ -11,45 +11,17 @@
 // always-on transform's single pass over the same file, so this samples
 // up to 3 functions per file (first, middle, last) rather than every one
 // of the corpus's ~1159. That is a narrower check than the always-on
-// transform's own corpus test; see flt.md for what it does and does not
-// cover, and for whether it was actually run in this environment (no
-// DEPUG_CORPUS_DIR clone was available here, so it was not).
-import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+// transform's own corpus test: it samples where that one is exhaustive.
+//
+// See test/support/corpus.ts for where the corpus comes from and how to
+// point this at one.
 import { describe, expect, it } from "vitest";
 import ts from "typescript";
 import { instrumentTarget, listInstrumentableFunctions } from "../src/flt-transform.ts";
+import { EXPECTED_FILE_COUNT, corpusAvailable, loadCorpus } from "./support/corpus.ts";
 
 type SourceFileWithParseDiagnostics = ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] };
 
-const CLONE_DIR = process.env.DEPUG_CORPUS_DIR ?? "";
-const COMMIT_SHA = "e2740d5a1bd0b4254e517e3af8b60789284bc7bd";
-const EXCLUDED_SUFFIXES = [".test.ts", ".spec.ts"];
-const EXPECTED_FILE_COUNT = 188;
-
-function corpusAvailable(): boolean {
-  if (CLONE_DIR === "" || !existsSync(CLONE_DIR)) return false;
-  try {
-    execFileSync("git", ["-C", CLONE_DIR, "cat-file", "-e", COMMIT_SHA], { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function listCorpusFiles(): string[] {
-  const out = execFileSync("git", ["-C", CLONE_DIR, "ls-tree", "-r", "--name-only", COMMIT_SHA, "--", "src"], {
-    encoding: "utf8",
-  });
-  return out
-    .split("\n")
-    .filter((path) => path.endsWith(".ts"))
-    .filter((path) => !EXCLUDED_SUFFIXES.some((suffix) => path.endsWith(suffix)));
-}
-
-function readCorpusFile(path: string): string {
-  return execFileSync("git", ["-C", CLONE_DIR, "show", `${COMMIT_SHA}:${path}`], { encoding: "utf8" });
-}
 
 function countParseDiagnostics(fileName: string, source: string): number {
   const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true) as SourceFileWithParseDiagnostics;
@@ -67,16 +39,15 @@ describe.skipIf(!corpusAvailable())("flt transform against a real-world TypeScri
   it(
     "preserves line count and introduces no new syntax errors for a sample of each file's functions",
     () => {
-      const paths = listCorpusFiles();
-      expect(paths.length).toBe(EXPECTED_FILE_COUNT);
+      const files = loadCorpus();
+      expect(files).toHaveLength(EXPECTED_FILE_COUNT);
 
       const lineCountMismatches: string[] = [];
       const newSyntaxErrors: string[] = [];
       const notFound: string[] = [];
       let sampledFunctions = 0;
 
-      for (const path of paths) {
-        const original = readCorpusFile(path);
+      for (const { path, source: original } of files) {
         const targets = sample(listInstrumentableFunctions(original, path), 3);
         const before = countParseDiagnostics(path, original);
 

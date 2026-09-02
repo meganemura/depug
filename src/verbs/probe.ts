@@ -22,13 +22,15 @@ import { SCHEMA_VERSION } from "../evidence.ts";
 import { fidWithoutCall, parseFid } from "../fid.ts";
 import { compareShape, type Mismatch } from "../shape-report.ts";
 import type { ObservedShape } from "../observed-shape.ts";
-import type { ProbeFunctionRecord } from "../probe-runtime.ts";
+import type { ProbeFunctionRecord, ProbePosition } from "../probe-runtime.ts";
 import type { ProbeTarget } from "../probe-transform.ts";
 import { applyConfigArgument } from "../wrapper-config.ts";
 import { writeProbeWrapperConfig } from "./probe-config.ts";
 
 export interface ProbeColumn {
   observed: ObservedShape;
+  samples: string[];
+  samples_omitted: number;
   declared: DeclaredType | null;
   mismatches: Mismatch[];
 }
@@ -110,9 +112,12 @@ function declaredFor(cwd: string, targets: readonly string[]): Map<string, Retur
   return out;
 }
 
-function column(observed: ObservedShape, declared: DeclaredType | undefined): ProbeColumn {
+function column(position: ProbePosition, declared: DeclaredType | undefined): ProbeColumn {
+  const observed = position.observed;
   return {
     observed,
+    samples: position.samples,
+    samples_omitted: position.samples_omitted,
     declared: declared ?? null,
     // With no declared type there is nothing to disagree with. An empty
     // list here means "not compared", which `declared: null` states.
@@ -164,7 +169,7 @@ export function runProbe(input: RunProbeInput): ProbeResult {
         threw: record.threw,
         parameters: record.parameters.map((parameter, index) => ({
           name: parameter.name,
-          ...column(parameter.observed, signature?.parameters[index]?.type),
+          ...column(parameter, signature?.parameters[index]?.type),
         })),
         parameters_not_observed: matchedById.get(id)?.parameters_not_observed ?? [],
         returns: column(record.returns, signature?.returnType),

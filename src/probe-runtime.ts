@@ -5,22 +5,42 @@
 // transform time, and the two meet after the run. observed-shape.ts
 // records the same split and the measurement behind it.
 //
-// The record holds shapes and counts, not values. A probe answers "what
-// arrived here", and the shape answers it without writing anything a
-// reader did not ask for; a captured value can carry a secret, and this
-// module never has to decide whether one did.
+// The record holds shapes and counts for every call, and a few rendered
+// values beside them.
 //
-// Counts cover every call. Sampling them would let a later null hide and
-// support a claim that it never happened, which is the opposite of what
-// this tool is for.
+// The shapes alone were not enough in practice. Chasing a real failure
+// through seven calls to one function, the shapes agreed with each other
+// and with the declaration; only the values differed, so finding the wrong
+// call meant tracing all seven one at a time. A handful of samples turns
+// that into one run.
+//
+// Counts still cover every call. Sampling those would let a later null
+// hide and support a claim that it never happened, which is the opposite
+// of what this tool is for. Samples are capped; counts are not.
 import { emptyShape, observe, type ObservedShape } from "./observed-shape.ts";
+import { isSecretName, renderValue, type FltLimits } from "./flt-render.ts";
+
+export const PROBE_LIMITS: FltLimits = {
+  maxValueLength: 200,
+  maxElements: 10,
+};
+
+/** How many values are rendered for one position before counting only. */
+export const MAX_SAMPLES = 10;
+
+export interface ProbePosition {
+  observed: ObservedShape;
+  /** The first values seen, rendered. A name that reads as a secret is withheld. */
+  samples: string[];
+  samples_omitted: number;
+}
 
 export interface ProbeFunctionRecord {
   calls: number;
   /** Calls that left through an exception rather than a return. */
   threw: number;
-  parameters: { name: string; observed: ObservedShape }[];
-  returns: ObservedShape;
+  parameters: ({ name: string } & ProbePosition)[];
+  returns: ProbePosition;
 }
 
 export interface ProbeRuntime {
@@ -31,13 +51,28 @@ export interface ProbeRuntime {
   reset(): void;
 }
 
+function emptyPosition(): ProbePosition {
+  return { observed: emptyShape(), samples: [], samples_omitted: 0 };
+}
+
+function record(position: ProbePosition, value: unknown, secret: boolean): void {
+  observe(position.observed, value);
+  if (secret) return;
+  if (position.samples.length < MAX_SAMPLES) {
+    const rendered = renderValue(value, PROBE_LIMITS);
+    position.samples.push("value" in rendered ? rendered.value : "[REDACTED]");
+  } else {
+    position.samples_omitted += 1;
+  }
+}
+
 export function createProbeRuntime(): ProbeRuntime {
   const byTarget = new Map<string, ProbeFunctionRecord>();
 
   function forTarget(target: string): ProbeFunctionRecord {
     let found = byTarget.get(target);
     if (!found) {
-      found = { calls: 0, threw: 0, parameters: [], returns: emptyShape() };
+      found = { calls: 0, threw: 0, parameters: [], returns: emptyPosition() };
       byTarget.set(target, found);
     }
     return found;
@@ -50,14 +85,16 @@ export function createProbeRuntime(): ProbeRuntime {
       parameterNames.forEach((name, index) => {
         let slot = entry.parameters[index];
         if (!slot) {
-          slot = { name, observed: emptyShape() };
+          slot = { name, ...emptyPosition() };
           entry.parameters[index] = slot;
         }
-        observe(slot.observed, args[index]);
+        // A parameter whose name reads as a secret is counted but never
+        // rendered, so a probe cannot be the thing that writes one down.
+        record(slot, args[index], isSecretName(name));
       });
     },
     exitReturn(target, value) {
-      observe(forTarget(target).returns, value);
+      record(forTarget(target).returns, value, false);
     },
     exitThrow(target) {
       // A throw is not a return of undefined. Counting it apart is what

@@ -98,8 +98,34 @@ export function buildSnapError(name: string, message: string, stack: string, lim
 
 export interface RerunInput {
   testFile: string;
-  testName: string;
+  /**
+   * The suite names enclosing the test, outermost first, and the test's
+   * own name last.
+   */
+  namePath: readonly string[];
   seed: number | null;
+}
+
+const REGEX_METACHARACTERS = /[.*+?^${}()|[\]\\]/g;
+
+/**
+ * Builds the `-t` pattern that selects exactly one test.
+ *
+ * vitest matches `-t` as a regular expression against the test's full
+ * name, with the enclosing suites joined by a space. Three things follow,
+ * and each one was measured against vitest 4.1.11 rather than assumed:
+ *
+ * - The separator is a space. The " > " form a reporter prints for a human
+ *   matches nothing at all.
+ * - The name is escaped. A test called `handles a (paren)` is a regular
+ *   expression that does not match its own name.
+ * - The pattern is anchored. Without anchors, a test named `saves a draft`
+ *   also selects `saves a draft and publishes it`, and the rerun quietly
+ *   runs two tests where it claimed one.
+ */
+export function buildTestNamePattern(namePath: readonly string[]): string {
+  const escaped = namePath.map((part) => part.replace(REGEX_METACHARACTERS, "\\$&")).join(" ");
+  return `^${escaped}$`;
 }
 
 /**
@@ -107,8 +133,15 @@ export interface RerunInput {
  * run had one: adding `--sequence.seed` where the suite never set it would
  * put a value in the command that the original run did not use.
  */
-export function buildRerunCommand({ testFile, testName, seed }: RerunInput): string {
-  const parts = ["npx", "vitest", "run", JSON.stringify(testFile), "-t", JSON.stringify(testName)];
+export function buildRerunCommand({ testFile, namePath, seed }: RerunInput): string {
+  const parts = [
+    "npx",
+    "vitest",
+    "run",
+    JSON.stringify(testFile),
+    "-t",
+    JSON.stringify(buildTestNamePattern(namePath)),
+  ];
   if (seed !== null) parts.push(`--sequence.seed=${seed}`);
   return parts.join(" ");
 }

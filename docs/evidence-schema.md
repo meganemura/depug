@@ -347,11 +347,15 @@ One JSON file for one or more named functions.
         {
           "name": "raw",
           "observed": {"samples": 5, "kinds": {"string": 5}, "properties": {}},
+          "samples": ["\"{\\\"id\\\": \\\"1\\\"}\""],
+          "samples_omitted": 0,
           "declared": {"form": "primitive", "kinds": ["string"]},
           "mismatches": []
         }
       ],
       "returns": {
+        "samples": ["{id: \"1\"}"],
+        "samples_omitted": 0,
         "observed": {
           "samples": 5,
           "kinds": {"object": 5},
@@ -380,6 +384,23 @@ One JSON file for one or more named functions.
 
 A target here omits `#k`: a probe observes every call to that function, not
 one of them.
+
+### Sample values
+
+`samples` holds the first values seen at a position, rendered by the rules
+under **Rendered values**; `samples_omitted` counts the ones past the cap.
+Counts in `observed` still cover every call, so a rare value cannot hide
+behind the cap.
+
+The samples exist because shapes alone were not enough. Chasing one real
+failure through seven calls to a single function, every call's shape
+agreed with every other and with the declaration; only the values
+differed. Without samples, finding the wrong call meant tracing all seven
+one at a time.
+
+A parameter whose name reads as a secret is counted but never rendered,
+under the rules in **Secrets**. A probe is not the thing that writes a
+secret down.
 
 ### Observed shape
 

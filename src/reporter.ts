@@ -50,6 +50,22 @@ function guidance(producerPresent: boolean, frameCount: number): string {
   return "the value's source already returned; rerun to reach it";
 }
 
+/**
+ * The suite names enclosing a test, outermost first, then the test's own
+ * name. This walks the parent chain rather than splitting `fullName`,
+ * because a suite or test name is free to contain the separator that
+ * string is joined with.
+ */
+function testNamePath(testCase: { name?: string; parent?: unknown }): string[] {
+  const path: string[] = [];
+  let node: { type?: string; name?: string; parent?: unknown } | undefined = testCase as never;
+  while (node && node.type !== "module") {
+    if (node.name) path.push(node.name);
+    node = node.parent as typeof node;
+  }
+  return path.reverse();
+}
+
 interface ReporterOptions {
   outputDir?: string;
 }
@@ -80,6 +96,7 @@ export default class DepugReporter {
     name?: string;
     fullName?: string;
     module?: { moduleId?: string };
+    parent?: unknown;
     result?: () => { state?: string; errors?: readonly Record<string, unknown>[] } | undefined;
   }): void {
     if (!this.#enabled) return;
@@ -94,6 +111,7 @@ export default class DepugReporter {
     const frames = allFrames.slice(0, limits.max_frames);
     const testFile = testCase.module?.moduleId ? relative(this.#root, testCase.module.moduleId) : null;
     const testName = testCase.fullName ?? testCase.name ?? null;
+    const namePath = testNamePath(testCase);
 
     // The test's own position is the last application frame in its file,
     // which is where the failing expression sits.
@@ -120,7 +138,9 @@ export default class DepugReporter {
       ),
       frames,
       rerun_command:
-        testFile && testName ? buildRerunCommand({ testFile, testName, seed: this.#seed }) : null,
+        testFile && namePath.length > 0
+          ? buildRerunCommand({ testFile, namePath, seed: this.#seed })
+          : null,
       seed: this.#seed,
       limits,
     };

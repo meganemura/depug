@@ -164,3 +164,48 @@ describe("the printed rerun command", () => {
     expect(output, output).toMatch(/Tests\s+1 failed \| 2 skipped \(3\)/);
   }, 90_000);
 });
+
+describe("a rerun command for a test inside a describe", () => {
+  // A flat fixture cannot catch this. vitest joins the suite and test
+  // names with a space and matches the result as a regular expression, so
+  // the " > " form, an unescaped name, or a missing anchor each selects
+  // something other than the one test.
+  const NESTED_DIR = fileURLToPath(new URL("../fixtures/nested", import.meta.url));
+
+  it("selects exactly the one test, and not its sibling", () => {
+    const outputDir = mkdtempSync(join(tmpdir(), "depug-nested-"));
+    const nestedRun = runFixtureVitest(join(NESTED_DIR, "vitest.config.ts"), NESTED_DIR, {
+      DEPUG_OUTPUT_DIR: outputDir,
+    });
+
+    const runs = readdirSync(outputDir).filter((name) => name.startsWith("run-"));
+    const dir = join(outputDir, runs[0]);
+    const file = readdirSync(dir).find((name) => name !== "index.json")!;
+    const parsed = JSON.parse(readFileSync(join(dir, file), "utf8")) as Evidence;
+
+    const command = parsed.rerun_command!;
+    const args = command
+      .replace(/^npx vitest /, "")
+      .match(/"(?:[^"\\]|\\.)*"|\S+/g)!
+      .map((token) => (token.startsWith('"') ? JSON.parse(token) : token));
+
+    const env: Record<string, string | undefined> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (key.startsWith("VITEST") || key.startsWith("TINYPOOL")) continue;
+      env[key] = value;
+    }
+    env.DEPUG_DISABLE = "1";
+
+    const result = spawnSync(VITEST_BIN, args, {
+      cwd: NESTED_DIR,
+      env: env as NodeJS.ProcessEnv,
+      encoding: "utf8",
+      timeout: 60_000,
+    });
+    const output = `${result.stdout}${result.stderr}`;
+    // Two tests exist and one is a prefix of the other. Exactly one runs.
+    expect(output, `${command}\n${output}\n${nestedRun.stdout}`).toMatch(
+      /Tests\s+1 failed \| 1 skipped \(2\)/,
+    );
+  }, 90_000);
+});
