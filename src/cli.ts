@@ -93,8 +93,24 @@ export function parseArgs(argv: readonly string[]): ParsedArgs | { error: string
   return parsed;
 }
 
+/**
+ * Whether the arguments ask for depug's own usage.
+ *
+ * Only what comes before `--` counts. Everything after it belongs to the
+ * command depug wraps, and `vitest --help` after the separator is that
+ * command's business. Before the separator the flag can sit anywhere: a
+ * reader types `depug frames --help` to learn what frames takes, and an
+ * error about a missing command is the wrong answer to that.
+ */
+export function wantsHelp(argv: readonly string[]): boolean {
+  if (argv.length === 0) return true;
+  const separator = argv.indexOf("--");
+  const own = separator === -1 ? argv : argv.slice(0, separator);
+  return own.includes("--help") || own.includes("-h");
+}
+
 export function run(argv: readonly string[]): CliResult {
-  if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {
+  if (wantsHelp(argv)) {
     return { exitCode: 0, stdout: USAGE };
   }
 

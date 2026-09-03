@@ -18,7 +18,7 @@ import { eventsToJsonl, flushWorker, readWorkerFiles, toFrameRecord } from "../s
 import { createRuntime } from "../src/runtime.ts";
 import { seedFromCommand } from "../src/verbs/frames.ts";
 import { formatPreflight } from "../src/verbs/preflight.ts";
-import { run } from "../src/cli.ts";
+import { run, wantsHelp } from "../src/cli.ts";
 
 const FIXTURE_DIR = fileURLToPath(new URL("../fixtures/failing", import.meta.url));
 const VITEST_BIN = fileURLToPath(new URL("../node_modules/.bin/vitest", import.meta.url));
@@ -335,6 +335,25 @@ describe("what the command line refuses", () => {
   it("prints the same usage for --help as for no arguments", () => {
     expect(run(["--help"]).stdout).toBe(run([]).stdout);
     expect(run(["-h"]).exitCode).toBe(0);
+  });
+
+  it("answers --help after a verb with usage, not with a missing-command error", () => {
+    // Found on first use in a real project: `depug frames --help` printed
+    // "the command must follow `--`" and exited 2, which reads as a
+    // mistake when the reader was asking what frames takes.
+    const result = run(["frames", "--help"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe(run([]).stdout);
+    expect(run(["probe", "src/a.ts:f@1:1", "-h"]).exitCode).toBe(0);
+  });
+
+  it("leaves a --help after the separator to the wrapped command", () => {
+    // `vitest --help` after `--` is that command's flag, and depug must
+    // not swallow it. wantsHelp is checked directly because run would
+    // otherwise go on to execute the command.
+    expect(wantsHelp(["frames", "--", "npx", "vitest", "--help"])).toBe(false);
+    expect(wantsHelp(["frames", "--help", "--", "npx", "vitest"])).toBe(true);
+    expect(wantsHelp([])).toBe(true);
   });
 
   it("reports a malformed --at rather than guessing what was meant", () => {
