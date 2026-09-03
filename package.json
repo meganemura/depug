@@ -59,10 +59,10 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "pretest": "npm run build",
     "typecheck": "tsc --noEmit",
     "test": "tsc --noEmit && vitest run",
     "coverage": "vitest run --coverage",
-    "prepack": "rm -rf dist && tsc -p tsconfig.build.json",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {

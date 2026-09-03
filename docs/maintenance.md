@@ -8,9 +8,16 @@ What someone working on depug needs that is not in the README.
 npm test
 ```
 
-Type-checks the source first, then runs 203 tests. Two of them skip unless
-a corpus is available. `npm run typecheck` and `npm run coverage` run
-either half on its own.
+Builds, type-checks, then runs 205 tests. Two of them skip unless a
+corpus is available. `npm run build`, `npm run typecheck` and `npm run
+coverage` run each part on its own.
+
+The build is a prerequisite rather than a separate chore: one fixture
+loads depug through the package's own entry points, which name `dist/`, so
+a fresh clone cannot test until it has built. That fixture exists to fail
+when a published entry point stops resolving, and it earned its keep by
+failing on a clone of this repository before the build was wired in. The
+build takes about two seconds.
 
 The type check runs before the tests rather than beside them because a
 type error is usually the cheaper failure to read, and because the suite
