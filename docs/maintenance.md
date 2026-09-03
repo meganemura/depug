@@ -238,8 +238,10 @@ apply its own with its own flag. Aikido Safe Chain reports `ENOVERSIONS,
 No versions available` and prints the reason after the error rather than
 in it, which reads as an empty package; `--safe-chain-skip-minimum-package-age`
 turns it off for one command, and npm's own check needs
-`--min-release-age=0` beside it. This is the same class of trap as
-`ignore-scripts`.
+`--min-release-age=0` beside it. Excluding the package in `.npmrc` is not
+enough: with `min-release-age-exclude[]` naming this package, the install
+still failed, because that list belongs to npm and the wrapper keeps its
+own. This is the same class of trap as `ignore-scripts`.
 
 A new scoped name takes a few minutes to read back. The packument at
 `registry.npmjs.org/@scope%2fname` answered 404 for five minutes after
