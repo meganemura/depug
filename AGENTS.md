@@ -18,10 +18,11 @@ A test is a rerun device with the same inputs, so depug keeps no continuous reco
 
 ## Visibility
 
-This repository is public.
-Write all files in English: README, docs, comments, commit messages, and the skill.
+This repository is private today and is meant to be published.
+Write every file as if it were already public: README, docs, comments, commit messages, and the skill, all in English.
 Do not write any reference to internal working documents into committed files.
 When you want to reference one, write its substance in place.
+Publishing is the owner's decision at that moment; see `docs/maintenance.md` for what to check before it.
 
 ## Settled design
 
