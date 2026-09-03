@@ -20,6 +20,15 @@ npm install --save-dev @meganemura/depug
 depug carries its own copy of `typescript`, so the version your project
 is on does not have to match and does not have to change.
 
+To move an exact pin to a later release, name the version. `npm install
+@meganemura/depug` finds the pin already satisfied, changes nothing, and
+exits 0, and `npm update` does the same; `npm outdated` is what reports
+the gap.
+
+```sh
+npm install --save-dev --save-exact @meganemura/depug@latest
+```
+
 Or from a checkout: `npm install && npm run build`, then point a
 dependency at the directory.
 

@@ -526,3 +526,24 @@ given `--include src --include nowhere`, records the same calls as with
 records none. What was not measured: a project whose `package.json` field
 and vitest `projects` disagree about which package holds the code; the
 first prefix is the one that names the project.
+
+## An exact pin does not move on its own (2026-09-04)
+
+Not a decision about depug so much as one recorded because two of the
+three projects using it pin exactly, which the dependency rules here ask
+for, and the obvious upgrade command is silent about doing nothing.
+
+With `"@meganemura/depug": "0.1.1"` in `package.json` and 0.1.2 on the
+registry, `npm install --save-dev --save-exact @meganemura/depug` leaves
+the pin at 0.1.1 and exits 0. `npm update @meganemura/depug` also leaves
+it. Both read as success. `npm install ...@latest` moves it, and `npm
+outdated` is the command that reports the gap:
+
+```
+Package            Current  Wanted  Latest
+@meganemura/depug    0.1.1   0.1.1   0.1.2
+```
+
+Measured on 2026-09-04 in a fresh project, after a real upgrade in
+another project stopped on the same thing. The README's install section
+names `@latest`.
