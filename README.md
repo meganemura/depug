@@ -236,12 +236,20 @@ shell that does real work -- the reporter cost nothing above the noise,
 with `--experimental-test-coverage` on. A second reporter alongside it
 cost nothing either.
 
-One project reports otherwise: 700 tests on node:test, 158 s without the
-reporter and 191-197 s with it, about a fifth. That has not been
-reproduced here, and the measurement it came from has no run with two
-reporters and no depug, which is what separates the reporter from the
-second slot. If your suite is large, measure it rather than trusting
-either number.
+One project measures otherwise, on a suite where each of 700 tests takes
+about 226 ms: it spawns a shell per gate check, contends real processes
+against a lock, and builds and discards a git repository. Alternating the
+configurations, two `spec` reporters and no depug ran 129 s and 136 s,
+and depug beside one `spec` ran 162 s twice: **+26 s and +33 s, around a
+fifth, and in depug's layer rather than in the second reporter slot.**
+
+That does not reproduce here at any shape tried, and the largest of those
+runs 2.5 s where theirs runs 158 s. Two numbers 60 times apart do not
+speak for each other, so the cost of the always-on layer on a large,
+process-heavy suite is **unexplained rather than measured at zero**. If
+your suite is one of those, measure it: run the configurations
+alternately, because absolute times on a shared machine drifted by 20 %
+between sittings and only the difference within a sitting held.
 
 A verb's instrumentation is a fixed cost of about 67 ms for each worker
 process, dominated by loading `typescript`, plus about 46 ns for each

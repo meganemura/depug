@@ -570,16 +570,30 @@ configuration run three times with `--experimental-test-coverage`:
 
 The reporter's module graph reaches no parser and loads in 18 ms.
 
-The gap between 2.5 s and 158 s is the honest limit of this: a fifth of
-2.5 s is 0.5 s, which these runs would show, but a suite whose tests take
-226 ms each is not a suite this reproduces. What the reporting project's
-measurement lacks is a run with **two reporters and no depug**. It
-compared depug plus `spec` against `spec` alone, and concluded the second
-slot was free by comparing `spec` alone against the default reporter --
-one reporter against one reporter. Here two `spec` reporters cost the
-same as one, so the second slot looks free at this scale too, but at that
-scale it is untested.
+A fourth shape, 200 tests writing 40,000 lines between them, tested
+whether the cost follows the event count rather than the test count.
+`spec` twice ran 0.38-0.41 s and depug beside `spec` ran 0.40-0.45 s.
 
-Recorded rather than fixed, because a number that cannot be reproduced
-cannot be optimised against. The README now carries both figures and says
-which one has not been reproduced.
+The missing control has since been run by the reporting project, and it
+settles which half is responsible. Alternating within one sitting: two
+`spec` reporters and no depug, 129 s and 136 s; depug beside one `spec`,
+162 s twice. **The second reporter slot is free and the cost is in
+depug's layer**, +26 s and +33 s, the same range as the first sitting.
+
+The same run produced a warning about the earlier numbers. Its
+depug-free side measured 129-136 s where the first sitting measured
+158-161 s, on the same machine with seven other test processes running.
+Absolute times across sittings are not comparable; only the difference
+within one sitting is.
+
+So the position is: the cost is real, it is in the reporter, and it does
+not reproduce here at any shape tried. The largest shape here runs 2.5 s
+against their 158 s, and two numbers 60 times apart do not speak for each
+other. The reporter's loop skips every event but a failure and the
+summary, so there is no per-test work to point at, and the next
+measurement worth making is whether a reporter module that does nothing
+at all costs the same on that suite -- which would put the cost in how
+Node feeds a module reporter rather than in anything depug does.
+
+Recorded rather than fixed. The README carries both figures and calls the
+cost unexplained rather than zero.
