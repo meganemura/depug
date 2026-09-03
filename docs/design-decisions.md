@@ -467,6 +467,13 @@ the host's `tsconfig.json`. It builds its program with fixed options
 (`src/verbs/probe.ts`), so a configuration written for a compiler depug
 does not carry cannot reach the checker that depug does carry.
 
-What was not measured: a host on 5.x, where a dedupe would need npm to
-choose depug's 6.0.3 for both. TypeScript 7 as depug's own parser is
-unchanged and still blocked, for the reason in the entry above.
+A host on 5.x carries the second copy too, measured after the release on
+a host pinned to 5.5.4: two directories named `typescript`, 5.5.4 at the
+root and 6.0.3 under depug, 24 MB of the tree's 80 MB. An exact pin
+shares a copy only with a host on that same version, so 6.0.3 is the one
+case that dedupes. depug ran there as it does on 7: the reporter printed
+its two lines, `frames` found the call, and the declared-type column read
+the host's interface, optional property included.
+
+TypeScript 7 as depug's own parser is unchanged and still blocked, for
+the reason in the entry above.
