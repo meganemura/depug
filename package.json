@@ -1,5 +1,5 @@
 {
-  "name": "depug",
+  "name": "@meganemura/depug",
   "version": "0.1.0",
   "description": "Measure runtime values in TypeScript test runs instead of guessing them from source.",
   "keywords": [
@@ -13,6 +13,9 @@
     "coding-agents"
   ],
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "homepage": "https://github.com/meganemura/depug#readme",
   "repository": {
     "type": "git",

@@ -105,6 +105,10 @@ line, a plain import, and a vitest config each fail on it. Installing the
 packed tarball into a fresh project is what showed that, and is now part
 of the release check.
 
+The registry name is `@meganemura/depug`. npm rejects the unscoped name as
+too close to `debug`, `depd`, `defu`, and `pug`, which is the same
+closeness the name was chosen for. The command is `depug`.
+
 ### Scope
 
 vitest and node:test, on Node, with `typescript` as a peer dependency from

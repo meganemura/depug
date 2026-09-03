@@ -400,3 +400,23 @@ never produce.
 
 The limit is recorded rather than worked around, because sequential tests
 are the common case and the public hook API costs nothing to use.
+
+## The published name carries a scope (2026-09-03)
+
+The name sits one letter from `debug`, and that is what the registry
+rejects. `npm publish` answered 403, "Package name too similar to existing
+packages depd, debug, pug, defu". Those four draw 707,321,997,
+150,039,831, 39,199,373, and 3,867,039 downloads a week. The check runs on
+the upload and not on a name lookup, so the registry answering 404 for a
+name says only that nobody holds it. The name was read that way on
+2026-09-02 and recorded as free.
+
+The package is `@meganemura/depug`. A scope was the one route the registry
+itself offered, and it keeps the name the design rests on. The command
+stays `depug`, because an executable's name is independent of the package
+that carries it, and so does the `tool.name` in every evidence file.
+
+What was not measured: whether an organization named `depug` could hold
+the package instead. npmjs.com answers 403 to an unauthenticated request
+for any organization page, so the name could not be read without creating
+one.

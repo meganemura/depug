@@ -14,7 +14,7 @@ v26.7.0, vitest 4.1.11, and typescript 6.0.3.
 ## Install
 
 ```sh
-npm install --save-dev depug
+npm install --save-dev @meganemura/depug
 ```
 
 Or from a checkout: `npm install && npm run build`, then point a
@@ -24,7 +24,7 @@ Add the reporter to your vitest config. Nothing else has to change:
 
 ```ts
 import { defineConfig } from "vitest/config";
-import DepugReporter from "depug/reporter";
+import DepugReporter from "@meganemura/depug/reporter";
 
 export default defineConfig({
   test: {

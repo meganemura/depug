@@ -182,6 +182,12 @@ This repository holds no release workflow, so a release is what the owner
 does by hand. Publishing to npm, changing the repository's visibility, and
 pushing a tag are each their decision at that moment.
 
+The package name carries a scope, and npm treats a scoped package as
+private unless it is told otherwise. `publishConfig.access` says `public`
+in `package.json` so that the setting travels with the package instead of
+depending on a flag somebody remembers to type. Why the name has a scope
+at all is in `docs/design-decisions.md`.
+
 What to check first:
 
 - `npm test` passes with `DEPUG_CORPUS_DIR` set, not only without it.
@@ -190,9 +196,9 @@ What to check first:
   messages, and confirm that everything the ignore file excludes is still
   excluded.
 - `package.json` still exports what the README tells a reader to import.
-  One fixture imports depug by package name rather than by path, so the
-  suite fails if that entry point stops resolving; a relative import would
-  keep passing while the public one broke.
+  The suite does not check this. Every fixture imports by relative path so
+  that a fresh clone runs the tests before there is a build, which leaves
+  the tarball check below as the only thing that exercises the export map.
 - The measurements quoted in `README.md`, `CHANGELOG.md`, and
   `docs/design-decisions.md` still describe the code. Each one names the
   machine and the sample it came from, and a number that has quietly
