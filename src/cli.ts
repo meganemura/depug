@@ -8,12 +8,13 @@
 // depug never runs a test command on its own initiative. Each verb starts
 // a process only when invoked, which is what keeps the always-on layer
 // free of the cost.
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 import { writeJson } from "./evidence.ts";
 import { parseFid } from "./fid.ts";
 import { renderDeclared, renderObserved } from "./shape-report.ts";
 import { readFileSync } from "node:fs";
 import { functionsContaining } from "./function-range.ts";
+import { countCandidates, displayPrefix, isUnderAny, resolveIncludes, testFileIn } from "./include.ts";
 import { declaresProjects, findProjectConfig } from "./wrapper-config.ts";
 import { runFrames } from "./verbs/frames.ts";
 import { runFlt } from "./verbs/flt.ts";
@@ -40,7 +41,9 @@ Verbs:
                             line, in that line's own scope
 
 Options:
-  --include <path>   Instrument files under this path (default: <cwd>/src)
+  --include <path>   Instrument files under this path. Repeat it for more
+                      than one. Default: "depug.include" in package.json,
+                      else <cwd>/src
   --cwd <path>       Run the command here (default: the current directory)
   --index <path>     flt only: refuse if this frames index's code state
                       does not match the working tree this run starts from
@@ -59,7 +62,7 @@ interface ParsedArgs {
   command: string[];
   /** Positional arguments the verb takes before its options. */
   operands: string[];
-  include?: string;
+  include: string[];
   cwd?: string;
   line?: number;
   visit?: number;
@@ -77,10 +80,10 @@ export function parseArgs(argv: readonly string[]): ParsedArgs | { error: string
   if (before.length === 0) return { error: "no verb was given" };
   if (command.length === 0) return { error: "no command followed `--`" };
 
-  const parsed: ParsedArgs = { verb: before[0], command, operands: [] };
+  const parsed: ParsedArgs = { verb: before[0], command, operands: [], include: [] };
   for (let i = 1; i < before.length; i++) {
     const arg = before[i];
-    if (arg === "--include") parsed.include = before[++i];
+    if (arg === "--include") parsed.include.push(before[++i]);
     else if (arg === "--cwd") parsed.cwd = before[++i];
     else if (arg === "--line") parsed.line = Number(before[++i]);
     else if (arg === "--visit") parsed.visit = Number(before[++i]);
@@ -120,11 +123,12 @@ export function run(argv: readonly string[]): CliResult {
   }
 
   const cwd = resolve(parsed.cwd ?? process.cwd());
-  // `src` is the default because that is where a project's own code
-  // usually sits, and instrumenting a dependency would put calls in the
-  // index that no verb can address anyway.
-  const includePathPrefix = resolve(cwd, parsed.include ?? "src");
-  const input = { command: [...parsed.command], cwd, includePathPrefix };
+  // The boundary comes from the flag, then package.json, then `src`.
+  // `src` is last because that is where a project's own code usually
+  // sits, and instrumenting a dependency would put calls in the index
+  // that no verb can address anyway.
+  const include = resolveIncludes(cwd, parsed.include);
+  const input = { command: [...parsed.command], cwd, includePathPrefixes: include.prefixes };
 
   if (parsed.verb === "frames") {
     const result = runFrames(input);
@@ -135,10 +139,26 @@ export function run(argv: readonly string[]): CliResult {
     if (calls === 0) {
       // An index of nothing and an index that was never built read the
       // same to someone scanning output, and the difference decides what
-      // they do next. The usual cause is an include path the test never
-      // reaches, so the note names that before anything else.
+      // they do next. Zero means either "depug watched nothing" or "the
+      // test called nothing it watched", so the notes say how much was
+      // watched, where that choice came from, and whether the test's own
+      // file is outside it -- the first-day mistake in two projects.
       lines.push("depug note: no application calls were recorded");
-      lines.push(`depug note: nothing under ${includePathPrefix} ran; use --include to point elsewhere`);
+      for (const prefix of include.prefixes) {
+        const n = countCandidates(prefix);
+        lines.push(
+          `depug note: ${displayPrefix(prefix, cwd)}/ holds ${n} file(s) depug would instrument` +
+            ` (--include from ${describeSource(include.source)})`,
+        );
+      }
+      const testFile = testFileIn(parsed.command, cwd);
+      if (testFile && !isUnderAny(testFile, include.prefixes)) {
+        lines.push(
+          `depug note: the test's own file ${relative(cwd, testFile)} is outside that set, and a` +
+            " test file is never instrumented; a function to watch has to live under --include",
+        );
+      }
+      lines.push("depug note: nothing under it ran; use --include to point elsewhere");
       const config = findProjectConfig(cwd);
       if (declaresProjects(config)) {
         // The include path is also what locates the project holding the
@@ -327,6 +347,12 @@ function describeAt(at: string, cwd: string, records: readonly { type: string; f
     );
   }
   return lines;
+}
+
+function describeSource(source: "flag" | "package.json" | "default"): string {
+  if (source === "flag") return "the command line";
+  if (source === "package.json") return "package.json";
+  return "the default";
 }
 
 function describeExit(status: number | null): string {

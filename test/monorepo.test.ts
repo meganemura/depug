@@ -38,7 +38,7 @@ describe("a verb against a project-split repository", () => {
     const result = runFrames({
       command: [VITEST_BIN, "run"],
       cwd: FIXTURE,
-      includePathPrefix: `${FIXTURE}/packages/app/src`,
+      includePathPrefixes: [`${FIXTURE}/packages/app/src`],
     });
 
     const records = readFileSync(result.files[0], "utf8")
@@ -68,7 +68,7 @@ describe("projects written inline in the root config", () => {
     const result = runFrames({
       command: [VITEST_BIN, "run"],
       cwd: INLINE,
-      includePathPrefix: `${INLINE}/packages/app/src`,
+      includePathPrefixes: [`${INLINE}/packages/app/src`],
     });
 
     const calls = readFileSync(result.files[0], "utf8")

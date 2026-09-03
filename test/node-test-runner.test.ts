@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { parseStack } from "../src/stack-parse.ts";
-import { chooseMode, rewriteFor } from "../src/node-test-hook.ts";
+import { chooseMode, readIncludePrefixes, rewriteFor } from "../src/node-test-hook.ts";
 import { detectRunner, withNodeTestHook } from "../src/runner.ts";
 import { runFrames } from "../src/verbs/frames.ts";
 import { runProbe } from "../src/verbs/probe.ts";
@@ -56,7 +56,7 @@ describe("the verbs against node --test", () => {
     const result = runFrames({
       command: COMMAND,
       cwd: FIXTURE,
-      includePathPrefix: `${FIXTURE}/src`,
+      includePathPrefixes: [`${FIXTURE}/src`],
     });
     const calls = records(result.files[0]).filter((r) => r.type === "call");
     // Relative path, TypeScript coordinates, per-test call index: the same
@@ -74,7 +74,7 @@ describe("the verbs against node --test", () => {
     const result = runFrames({
       command: COMMAND,
       cwd: FIXTURE,
-      includePathPrefix: `${FIXTURE}/src`,
+      includePathPrefixes: [`${FIXTURE}/src`],
     });
     const returns = records(result.files[0]).filter((r) => r.type === "return");
     expect(returns.find((r) => String(r.fid).includes("explode"))?.exit_kind).toBe("throw");
@@ -259,6 +259,21 @@ describe("choosing what to do from the variables a verb set", () => {
     expect(rewriteFor(mode, ROOT, `${ROOT}/node_modules/x/a.ts`, SOURCE)).toBeUndefined();
     expect(rewriteFor(mode, ROOT, `${ROOT}/src/a.css`, SOURCE)).toBeUndefined();
     expect(rewriteFor(mode, ROOT, `${ROOT}/src/a.test.ts`, SOURCE)).toBeUndefined();
+  });
+
+  it("accepts a JSON list of include prefixes and still a bare one", () => {
+    // frames passes the list as JSON, because a path can hold any
+    // delimiter a plain join would pick. A bare string is what callers
+    // before the list sent, and it must keep meaning one prefix.
+    expect(readIncludePrefixes(undefined)).toEqual(["src"]);
+    expect(readIncludePrefixes("lib")).toEqual(["lib"]);
+    expect(readIncludePrefixes('["cli","viewer/lib"]')).toEqual(["cli", "viewer/lib"]);
+    expect(readIncludePrefixes("[not json")).toEqual(["[not json"]);
+
+    const mode = chooseMode({ DEPUG_FRAMES_DIR: "/tmp/x", DEPUG_INCLUDE: '["cli","viewer/lib"]' })!;
+    expect(rewriteFor(mode, ROOT, `${ROOT}/cli/a.ts`, SOURCE)).toContain("__depug.enter");
+    expect(rewriteFor(mode, ROOT, `${ROOT}/viewer/lib/a.ts`, SOURCE)).toContain("__depug.enter");
+    expect(rewriteFor(mode, ROOT, `${ROOT}/src/a.ts`, SOURCE)).toBeUndefined();
   });
 
   it("probes only the file holding a target", () => {

@@ -65,15 +65,32 @@ export interface HookMode {
   setCurrentTest?: (name: string | null) => void;
 }
 
+/**
+ * The prefixes `DEPUG_INCLUDE` names: a JSON list, or one bare path for a
+ * caller that predates the list. Both forms are relative to the root.
+ */
+export function readIncludePrefixes(value: string | undefined): string[] {
+  if (value === undefined || value === "") return ["src"];
+  if (value.startsWith("[")) {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (Array.isArray(parsed) && parsed.every((p) => typeof p === "string")) return parsed as string[];
+    } catch {
+      // Not JSON after all; treat it as one path below.
+    }
+  }
+  return [value];
+}
+
 function framesMode(env: NodeJS.ProcessEnv): HookMode {
   const runtime = installGlobalRuntime();
-  const includePrefix = env.DEPUG_INCLUDE ?? "src";
+  const includePrefixes = readIncludePrefixes(env.DEPUG_INCLUDE);
 
   return {
     attributesTests: true,
     setCurrentTest: (name) => runtime.setCurrentTest(name),
     rewrite(relativePath, source) {
-      if (!relativePath.startsWith(includePrefix)) return undefined;
+      if (!includePrefixes.some((prefix) => relativePath.startsWith(prefix))) return undefined;
       if (/\.(test|spec)\.tsx?$/.test(relativePath)) return undefined;
       return instrumentSource(source, relativePath).code;
     },

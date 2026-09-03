@@ -64,8 +64,8 @@ export interface RunFramesInput {
   /** The child command, already split: `["npx", "vitest", "run", ...]`. */
   command: string[];
   cwd: string;
-  /** Files under this prefix are instrumented; the application boundary. */
-  includePathPrefix: string;
+  /** Files under any of these prefixes are instrumented; the application boundary. */
+  includePathPrefixes: string[];
   /** Detected from the command when not given. */
   runner?: Runner;
   /**
@@ -94,7 +94,7 @@ export function runFrames(input: RunFramesInput): FramesResult {
   // NODE_OPTIONS.
   const wrapper =
     runner === "vitest"
-      ? writeWrapperConfig({ cwd: input.cwd, includePathPrefix: input.includePathPrefix })
+      ? writeWrapperConfig({ cwd: input.cwd, includePathPrefixes: input.includePathPrefixes })
       : undefined;
 
   const [bin, ...rest] = input.command;
@@ -111,7 +111,9 @@ export function runFrames(input: RunFramesInput): FramesResult {
   if (runner === "node") {
     env.NODE_OPTIONS = withNodeTestHook(env.NODE_OPTIONS);
     env.DEPUG_ROOT = input.cwd;
-    env.DEPUG_INCLUDE = relative(input.cwd, input.includePathPrefix);
+    // A JSON list, because a path may hold any delimiter a plain join
+    // would pick, and the hook still accepts a bare string.
+    env.DEPUG_INCLUDE = JSON.stringify(input.includePathPrefixes.map((p) => relative(input.cwd, p)));
   }
   // The child is a re-execution, not the suite. Its own failures are the
   // point, and a second set of snapshot files would only add noise.

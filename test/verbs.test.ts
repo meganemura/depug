@@ -113,11 +113,25 @@ describe("frames", () => {
 
   it("says so plainly when nothing under the include path ran", () => {
     // Pointing at a directory the test never reaches is a mistake a reader
-    // should see named, not read as "this test called nothing".
+    // should see named, not read as "this test called nothing". Zero
+    // conflates "watched nothing" with "called nothing", so the notes
+    // give the count of what was watched, where that choice came from,
+    // and that the test's own file sits outside it.
     const result = run(["frames", "--cwd", FIXTURE_DIR, "--include", `${FIXTURE_DIR}/nowhere`,
       "--", VITEST_BIN, "run", "app.test.ts", "-t", PROPAGATION_TEST]);
     expect(result.stdout).toContain("no application calls were recorded");
+    expect(result.stdout).toContain("nowhere/ holds 0 file(s) depug would instrument (--include from the command line)");
+    expect(result.stdout).toContain("the test's own file app.test.ts is outside that set");
     expect(result.stdout).toContain("use --include to point elsewhere");
+  }, 120_000);
+
+  it("instruments under every --include given, not only the last", () => {
+    // The first prefix is the one with code; the second holds nothing. An
+    // implementation that keeps only the last occurrence records 0 calls.
+    const result = run(["frames", "--cwd", FIXTURE_DIR,
+      "--include", `${FIXTURE_DIR}/src`, "--include", `${FIXTURE_DIR}/nowhere`,
+      "--", VITEST_BIN, "run", "app.test.ts", "-t", PROPAGATION_TEST]);
+    expect(result.stdout).toMatch(/depug calls: [1-9]/);
   }, 120_000);
 });
 

@@ -72,8 +72,8 @@ export interface WrapperInput {
   cwd: string;
   /** The project's own config; found from `cwd` when not given. */
   baseConfig?: string;
-  /** Absolute paths of the files to instrument, or a predicate source. */
-  includePathPrefix: string;
+  /** Absolute directories; files under any of them are instrumented. */
+  includePathPrefixes: string[];
 }
 
 export interface Wrapper {
@@ -93,19 +93,21 @@ export interface Wrapper {
  * that position should not be told to write one before it can use a verb.
  */
 export function writeWrapperConfig(input: WrapperInput): Wrapper {
-  const includeLiteral = JSON.stringify(input.includePathPrefix);
+  const includeLiteral = JSON.stringify(input.includePathPrefixes);
   return writeGeneratedConfig({
     cwd: input.cwd,
     baseConfig: input.baseConfig,
     slug: "run",
     pluginModule: PLUGIN_MODULE,
     pluginExport: "depugPlugin",
-    projectFor: input.includePathPrefix,
+    // With several prefixes the first names the project; a run that
+    // spans two vitest projects is not something one wrapper can serve.
+    projectFor: input.includePathPrefixes[0],
     pluginOptions: [
       "{",
       `  root: ${JSON.stringify(input.cwd)},`,
       "  include: (id) =>",
-      `    id.startsWith(${includeLiteral}) &&`,
+      `    ${includeLiteral}.some((prefix) => id.startsWith(prefix)) &&`,
       '    !id.includes("/node_modules/") &&',
       "    /\\.tsx?$/.test(id) &&",
       "    !/\\.(test|spec)\\.tsx?$/.test(id),",
