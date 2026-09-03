@@ -355,6 +355,13 @@ Not measured: whether `unstable/sync`, which connects to a separate
 process, can return a parsed tree, and what starting that process would
 cost for each re-execution. Versions below 5.5.4 were not tried.
 
+The range in the heading described what a host had to have. On 2026-09-03
+depug began carrying one of those versions itself, and the entry "Ship the
+parser, do not ask the host for it" records why. What that entry did not
+change is everything above: TypeScript 7 still offers no entry point that
+turns source text into a tree, which is why the version depug carries is
+6.0.3.
+
 ## Record failure text, and reach for values on demand (2026-09-02)
 
 The always-on layer writes the test name, the error, the stack in
