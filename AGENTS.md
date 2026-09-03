@@ -67,7 +67,7 @@ The owner delegated these three on 2026-09-02, after the stage A numbers came in
   that entry point is the one thing it cannot do without. The three versions in
   the supported range were each run against the whole hono corpus: 5.5.4, 5.9.3,
   and 6.0.3 all found the same 792 functions and projected the same declared
-  types, which is why pinning one of them costs nothing. Real projects measured
+  types, which is why pinning one of them changes no result. Real projects measured
   on the same day sat inside this range: hono 6.0.3, vueuse 6.0.3, zod 5.5.4.
 
 - **`snap` records failure text only, with no locals.** Classifying 155 real
