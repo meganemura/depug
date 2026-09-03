@@ -56,12 +56,18 @@ function guidance(producerPresent: boolean, frameCount: number): string {
  * because a suite or test name is free to contain the separator that
  * string is joined with.
  */
-function testNamePath(testCase: { name?: string; parent?: unknown }): string[] {
+interface NameNode {
+  type?: string;
+  name?: string;
+  parent?: unknown;
+}
+
+function testNamePath(testCase: NameNode): string[] {
   const path: string[] = [];
-  let node: { type?: string; name?: string; parent?: unknown } | undefined = testCase as never;
+  let node: NameNode | undefined = testCase;
   while (node && node.type !== "module") {
     if (node.name) path.push(node.name);
-    node = node.parent as typeof node;
+    node = node.parent as NameNode | undefined;
   }
   return path.reverse();
 }

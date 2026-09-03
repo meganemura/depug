@@ -8,7 +8,13 @@ What someone working on depug needs that is not in the README.
 npm test
 ```
 
-122 tests. Two of them skip unless a corpus is available.
+Type-checks the source first, then runs 203 tests. Two of them skip unless
+a corpus is available. `npm run typecheck` and `npm run coverage` run
+either half on its own.
+
+The type check runs before the tests rather than beside them because a
+type error is usually the cheaper failure to read, and because the suite
+takes long enough that finding out afterwards wastes the wait.
 
 ## The corpus tests
 
@@ -59,8 +65,10 @@ The properties worth knowing about, because they hold the design up:
 
 Writing them found a real defect: a probe passed its renderer a limits
 object with the wrong keys, so no sample was ever truncated and a
-5000-character argument went into the evidence file whole. Nothing in the
-suite type-checks the source, which is what would have caught it.
+5000-character argument went into the evidence file whole. Nothing was
+type-checking the source, which is what would have caught it, so `npm
+test` now does that first. Reintroducing that same bug fails the check
+before a single test runs.
 
 ## Coverage
 
@@ -133,11 +141,13 @@ in the root config.
 
 ## Adding a dependency
 
-Two development dependencies today, `vitest` and `typescript`, both pinned
-exactly. `typescript` is also the peer dependency, from 5.5.4 up to but
+Five development dependencies, all pinned exactly: `typescript` and
+`vitest` to build and run, `@types/node` to type-check against, `hegel`
+for the properties, and vitest's v8 coverage provider. There is no runtime
+dependency. `typescript` is also the peer dependency, from 5.5.4 up to but
 not including 7.
 
-A third needs the owner's approval, an exact pin, and a version at least
+Another needs the owner's approval, an exact pin, and a version at least
 seven days old with no later security fix. `typescript` must not gain a
 second parser beside it.
 

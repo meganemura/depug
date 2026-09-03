@@ -8,7 +8,10 @@
 // embeds would then describe that intermediate text instead of the
 // TypeScript source (see docs/design-decisions.md, "Positions are
 // literals").
-import type { Plugin } from "vite";
+// vitest's own Plugin type, not vite's: the `config` hook below
+// returns a `test` section, which vitest adds to the config shape
+// and vite alone does not know about.
+import type { Plugin } from "vitest/config";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { instrumentTarget } from "./flt-transform.ts";

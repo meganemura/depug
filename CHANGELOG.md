@@ -83,6 +83,20 @@ measured 1.12x on heavy function bodies and 2.04x on four million trivial
 calls. Instrumenting one project's whole suite ran 4961 tests to the same
 result as without it, 14.31 s against a 14 s baseline.
 
+### How it is checked
+
+The suite type-checks the source, then runs example tests and
+property-based tests together. The properties are the ones the design
+rests on: that a rewrite never changes a file's line count, over generated
+TypeScript rather than only over fixtures; that a rerun command selects
+the test it names and no other; that a function id survives being written
+and read back; and that counts cover every call while only the rendered
+samples are capped.
+
+Two rewrites are also run over a real codebase at a pinned commit, because
+fixtures only cover the shapes their author thought of. That check is what
+found the one rewrite bug that reached a real project.
+
 ### Scope
 
 vitest and node:test, on Node, with `typescript` as a peer dependency from

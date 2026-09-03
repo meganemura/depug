@@ -5,7 +5,10 @@
 // two rewrites answer to different verbs. `frames` instruments every file
 // it is pointed at; a probe instruments the one file holding its target
 // and leaves the rest of the run at its ordinary speed.
-import type { Plugin } from "vite";
+// vitest's own Plugin type, not vite's: the `config` hook below
+// returns a `test` section, which vitest adds to the config shape
+// and vite alone does not know about.
+import type { Plugin } from "vitest/config";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";

@@ -24,12 +24,12 @@ function transform(plugin: unknown, code: string, id: string): string | null {
 
 describe("the always-on plugin", () => {
   it("adds its setup file so the runtime exists before the app module loads", () => {
-    const config = (depugPlugin() as { config: () => { test: { setupFiles: string[] } } }).config();
+    const config = (depugPlugin() as unknown as { config: () => { test: { setupFiles: string[] } } }).config();
     expect(config.test.setupFiles[0]).toMatch(/setup\.ts$/);
   });
 
   it("runs before types are stripped, or the positions would be wrong", () => {
-    expect((depugPlugin() as { enforce: string }).enforce).toBe("pre");
+    expect((depugPlugin() as unknown as { enforce: string }).enforce).toBe("pre");
   });
 
   it("touches a file the include predicate accepts, and no other", () =>

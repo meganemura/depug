@@ -4,7 +4,10 @@
 // It touches exactly one file, the one holding the target. Every other
 // module in the run reaches the runtime unchanged, which is what keeps an
 // injection from being something a reader has to go looking for.
-import type { Plugin } from "vite";
+// vitest's own Plugin type, not vite's: the `config` hook below
+// returns a `test` section, which vitest adds to the config shape
+// and vite alone does not know about.
+import type { Plugin } from "vitest/config";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { instrumentExec } from "./exec-transform.ts";

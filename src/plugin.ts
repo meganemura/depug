@@ -3,7 +3,10 @@
 // by writing one small wrapper config that imports its own config and adds
 // this plugin (see fixtures/basic/vitest.depug.config.ts for the pattern);
 // the project's config file itself never changes.
-import type { Plugin } from "vite";
+// vitest's own Plugin type, not vite's: the `config` hook below
+// returns a `test` section, which vitest adds to the config shape
+// and vite alone does not know about.
+import type { Plugin } from "vitest/config";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { instrumentSource } from "./transform.ts";
