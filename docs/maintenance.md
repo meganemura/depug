@@ -146,11 +146,15 @@ in the root config.
 
 ## Adding a dependency
 
-Five development dependencies, all pinned exactly: `typescript` and
-`vitest` to build and run, `@types/node` to type-check against, `hegel`
-for the properties, and vitest's v8 coverage provider. There is no runtime
-dependency. `typescript` is also the peer dependency, from 5.5.4 up to but
-not including 7.
+One runtime dependency, `typescript`, pinned to exactly 6.0.3. depug
+carries its own parser rather than asking the host for one, so a project
+installs depug whatever compiler it is on; `docs/design-decisions.md`
+holds the measurement that decided it.
+
+Four development dependencies, all pinned exactly: `vitest` to run,
+`@types/node` to type-check against, `hegel` for the properties, and
+vitest's v8 coverage provider. `typescript` is not among them, because
+one version written in two places drifts.
 
 Another needs the owner's approval, an exact pin, and a version at least
 seven days old with no later security fix. `typescript` must not gain a

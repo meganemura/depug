@@ -54,8 +54,11 @@ The owner delegated these three on 2026-09-02, after the stage A numbers came in
   measurement to 0 of 792 functions sharing an id. The transform already measures
   the position for the event payload, so the id costs nothing extra.
 
-- **`typescript` is a peer dependency at `>=5.5.4 <7.0.0`. depug does not support
-  TypeScript 7 in v0.1.** TypeScript 7.0.2 is the `latest` tag on npm and is the
+- **depug carries `typescript` as a dependency, pinned to 6.0.3, and does not
+  support TypeScript 7.** This was a peer dependency at `>=5.5.4 <7.0.0` until
+  2026-09-03, when every project that tried to install depug turned out to be on
+  TypeScript 7 and npm refused the tree; `docs/design-decisions.md` holds that
+  measurement. TypeScript 7.0.2 is the `latest` tag on npm and is the
   native reimplementation. Its package exports `.` to a version file; the parser
   and the checker moved behind `typescript/unstable/ast` and
   `typescript/unstable/sync`. Reading the 409 names `unstable/ast` exports found
@@ -64,8 +67,8 @@ The owner delegated these three on 2026-09-02, after the stage A numbers came in
   that entry point is the one thing it cannot do without. The three versions in
   the supported range were each run against the whole hono corpus: 5.5.4, 5.9.3,
   and 6.0.3 all found the same 792 functions and projected the same declared
-  types. Real projects measured on the same day sat inside this range: hono 6.0.3,
-  vueuse 6.0.3, zod 5.5.4.
+  types, which is why pinning one of them costs nothing. Real projects measured
+  on the same day sat inside this range: hono 6.0.3, vueuse 6.0.3, zod 5.5.4.
 
 - **`snap` records failure text only, with no locals.** Classifying 155 real
   failures from hono's own history put 94.2% in the shape where the function that
@@ -98,7 +101,7 @@ Measurements from 2026-09-03 on the same machine, for node:test.
 ## Conventions
 
 - Add a dependency only with the owner's approval. Pin the exact version. The version must be at least 7 days old with no later security fix.
-- `typescript` is a peer dependency. Do not add a second parser.
+- `typescript` is a dependency, pinned exactly. Do not add a second parser.
 - Do not publish to npm, do not create a remote, and do not change visibility without the owner's explicit approval at that moment.
 - Write design decisions in `docs/design-decisions.md` with the measurement that supports each one.
 - Write the evidence schema in `docs/evidence-schema.md` before the code that writes it.

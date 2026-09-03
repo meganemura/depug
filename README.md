@@ -17,6 +17,9 @@ v26.7.0, vitest 4.1.11, and typescript 6.0.3.
 npm install --save-dev @meganemura/depug
 ```
 
+depug carries its own copy of `typescript`, so the version your project
+is on does not have to match and does not have to change.
+
 Or from a checkout: `npm install && npm run build`, then point a
 dependency at the directory.
 

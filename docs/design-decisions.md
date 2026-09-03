@@ -420,3 +420,53 @@ What was not measured: whether an organization named `depug` could hold
 the package instead. npmjs.com answers 403 to an unauthenticated request
 for any organization page, so the name could not be read without creating
 one.
+
+## Ship the parser, do not ask the host for it (2026-09-03)
+
+`typescript` was a peer dependency at `>=5.5.4 <7.0.0`. Every project
+that tried to install depug had `typescript@7.0.2`, and npm refused the
+tree rather than installing anything:
+
+```
+npm error ERESOLVE unable to resolve dependency tree
+npm error Found: typescript@7.0.2
+npm error peer typescript@">=5.5.4 <7.0.0" from @meganemura/depug@0.1.0
+```
+
+Installing past that with `--legacy-peer-deps` produces half a tool. The
+reporter imports no parser, so it still writes evidence and still prints
+a rerun command; every verb that command names then fails to parse. A
+tool whose printed next step does not work is worse than one that refused
+to install.
+
+`typescript` is now a dependency, pinned to exactly 6.0.3, and no longer
+a development dependency. depug reads its own copy and never the host's,
+so the host's version stops being a question.
+
+The cost is one more copy of the parser on a host that is not already on
+6.0.3: 24,346,827 bytes over 140 files by the registry's own count, and
+24 MB on disk in a tree that measured 89 MB in total. A host already on
+6.0.3 shares one copy; `npm ls typescript` reported `deduped` and the
+tree held one directory named `typescript`.
+
+What was measured, on a host with `typescript@7.0.2` at its root and a
+`tsconfig.json` that TypeScript 7 wrote itself:
+
+- The install succeeds. `npm ls typescript` shows 7.0.2 at the root and
+  6.0.3 under depug.
+- The copy that runs is the nested one. Node answered 7.0.2 from the
+  host's root and 6.0.3 from inside depug's own directory.
+- Both reporters and all five re-execution verbs ran.
+- The declared-type column still reads the host's own types. Probing a
+  function returning an interface with an optional property and a
+  nullable one reported `nickname` as optional and `team` as accepting
+  null.
+
+That last one holds for a reason worth writing down: depug never reads
+the host's `tsconfig.json`. It builds its program with fixed options
+(`src/verbs/probe.ts`), so a configuration written for a compiler depug
+does not carry cannot reach the checker that depug does carry.
+
+What was not measured: a host on 5.x, where a dedupe would need npm to
+choose depug's 6.0.3 for both. TypeScript 7 as depug's own parser is
+unchanged and still blocked, for the reason in the entry above.

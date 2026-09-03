@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.1 - 2026-09-03
+
+depug installs whatever compiler the project is on.
+
+0.1.0 asked the host for the parser, as a peer dependency at `>=5.5.4
+<7.0.0`. Every project that tried to install it was on TypeScript 7, so
+npm refused the whole tree and nothing installed. depug now carries
+`typescript` itself, pinned to 6.0.3.
+
+The host keeps its own compiler and depug reads only its copy, so the two
+versions no longer have to agree. Measured on a host with 7.0.2 at its
+root and a `tsconfig.json` that TypeScript 7 wrote: both reporters and
+all five re-execution verbs ran, and the declared-type column still read
+the host's own interfaces, reporting an optional property as optional and
+a nullable one as accepting null. depug never reads the host's
+`tsconfig.json`, which is why a configuration for a newer compiler cannot
+reach the checker depug carries.
+
+The cost is one more copy of the parser, 24 MB, on a host that is not
+already on 6.0.3. A host on 6.0.3 shares one copy.
+
+Nothing else changed. TypeScript 7 is still not a parser depug can use,
+for the reason in the 0.1.0 notes.
+
 ## 0.1.0 - 2026-09-03
 
 The first release.
