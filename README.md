@@ -97,6 +97,36 @@ depug at src/utils/url.ts:208, innermost first:
 The innermost function comes first, because its locals are what that line
 touched. Only calls the run actually recorded are listed.
 
+#### Where the application boundary is
+
+`frames` and `preflight` instrument the files under one or more
+directories and treat everything else as not the application. The default
+is `src/`. A project that keeps its code elsewhere names it once in
+`package.json`:
+
+```json
+{ "depug": { "include": ["cli", "viewer/lib"] } }
+```
+
+`--include <path>` on the command line overrides that, and can be
+repeated. A test file is never instrumented, whichever set it falls in: a
+function you want to watch has to live under the boundary, not in the
+test.
+
+When an index comes back empty, the notes say how many files each
+directory holds that depug would instrument, where the boundary came
+from, and whether the test's own file sits outside it:
+
+```text
+depug calls: 0
+depug note: no application calls were recorded
+depug note: src/ holds 61 file(s) depug would instrument (--include from the default)
+depug note: the test's own file tests/probe.test.ts is outside that set, and a test file is never instrumented; a function to watch has to live under --include
+```
+
+Zero then says whether depug was watching anything, which is the
+difference between a wrong path and a test that called nothing.
+
 ### preflight — is this test safe to address by call index?
 
 ```text

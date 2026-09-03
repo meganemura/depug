@@ -484,3 +484,45 @@ the host's interface, optional property included.
 
 TypeScript 7 as depug's own parser is unchanged and still blocked, for
 the reason in the entry above.
+
+## Declare the boundary in package.json, and count what it holds (2026-09-04)
+
+`frames` and `preflight` need a line between the application and
+everything else, because the index they build is of application calls.
+0.1.1 drew that line at `src/`, moved only by `--include`, once per
+command. Three projects installed it on the same day and two of them
+crossed that line within the hour.
+
+One keeps its code in `cli/` and `viewer/lib/`, so every verb needed
+`--include cli` and still could not reach the second directory. The other
+put the function it wanted to watch inside the test file, and `frames`
+answered `calls: 0` -- correctly, because a test file is never
+instrumented, and unhelpfully, because nothing said so.
+
+Two changes. The boundary can be declared once, in `package.json` under
+`depug.include`, as one path or a list; `--include` can be repeated and
+still wins. And an empty index now says how many files each directory
+holds that depug would instrument, where the boundary came from, and
+whether the test's own file sits outside it.
+
+`package.json` rather than a config file, because it is the one file
+every project already has and a second file is one more thing to find.
+Rather than detection, because `cli/` and `viewer/lib/` are not something
+a heuristic finds without also finding `scripts/` and `test/`. The count
+is of candidates on disk, not of files the run loaded: it separates "the
+path holds nothing" from "the path holds code this test never imported",
+which is the distinction a reader of zero needs, and it costs one
+directory walk only on the path that already produced nothing.
+
+A test file stays outside the boundary whichever set it falls in. The
+index exists to name the application's calls, and a test's own helpers
+would put the test's scaffolding in it under the same ids as the code.
+The note says that rather than pointing at `--include tests/`, which
+would not work.
+
+Measured: the fixture with its test at the root and code under `src/`,
+given `--include src --include nowhere`, records the same calls as with
+`src` alone, and an implementation keeping only the last occurrence
+records none. What was not measured: a project whose `package.json` field
+and vitest `projects` disagree about which package holds the code; the
+first prefix is the one that names the project.

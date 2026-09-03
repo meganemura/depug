@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.1.2 - 2026-09-04
+
+What the first day of use in three projects asked for.
+
+### The application boundary can be declared once
+
+`frames` and `preflight` instrument the files under a directory and call
+everything else "not the application". The default was `src/` and could
+only be moved with `--include`, once, on every command. One project keeps
+its code in `cli/` and `viewer/lib/`, so every verb needed the flag and
+one flag was not enough.
+
+`package.json` can now carry the boundary, under `depug.include`, as one
+path or a list, and `--include` can be repeated. The flag still wins,
+because it is what a reader types to correct the other two.
+
+### An empty index says what it was watching
+
+`depug calls: 0` meant either "depug watched nothing" or "the test called
+nothing depug watched", and the output could not tell them apart. Another
+project's first probe put the function it wanted to watch inside the test
+file, which no boundary reaches because test files are never
+instrumented, and read 0 calls with nothing to explain it.
+
+The notes now say how many files each directory holds that depug would
+instrument, where the boundary came from, and whether the test's own file
+sits outside it.
+
+### `--help` after a verb prints usage
+
+`depug frames --help` printed "the command must follow `--`" and exited
+2. Only the first argument was checked. The flag now counts anywhere
+before `--` and nowhere after it, where it belongs to the wrapped
+command.
+
 ## 0.1.1 - 2026-09-03
 
 depug installs whatever compiler the project is on.
