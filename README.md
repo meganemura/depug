@@ -236,25 +236,20 @@ shell that does real work -- the reporter cost nothing above the noise,
 with `--experimental-test-coverage` on. A second reporter alongside it
 cost nothing either.
 
-One project sees something else on a suite where each of 700 tests takes
-about 226 ms, spawning a shell per gate check and contending real
-processes against a lock. Alternating the configurations, three separate
-sittings put depug 25-35 s above a reporter that does nothing. A fourth
-sitting, same machine and same suite, put the two within 5 s of each
-other in all four pairs, and its absolute times were 20 % below the
-earlier sittings' baseline for reasons neither of us can name.
-
-So: **on a large, process-heavy suite the always-on layer sometimes costs
-about a fifth, and sometimes costs nothing, and what distinguishes the
-two has not been found.** It does not reproduce here at all, including in
-the shape that produces it there -- eight files run in parallel, one
-spawning 200 child processes -- where fourteen interleaved pairs put
-depug 0.04 s below the do-nothing reporter.
+One project reported about a fifth on a suite where each of 700 tests
+takes about 226 ms, spawning a shell per gate check and contending real
+processes against a lock. That measurement turned out not to separate the
+reporter from the order it ran in: depug ran second in every pair, and
+running the **same** configuration three times in a row on that machine
+gave 137 s, 171 s, and 199 s. A 45 % drift with nothing changed swallows
+the 25-35 s the comparison had shown, so it is not evidence either way.
 
 If your suite is large and process-heavy, measure it rather than trusting
-any of these numbers. Run the configurations alternately and in both
-orders, and take several pairs: a three-pair sitting here showed a 1.5 s
-penalty that vanished at eight pairs.
+any of these numbers, and beware the same trap: alternating A then B
+still runs A first every time, so a machine drifting through a sitting
+charges the difference to whichever arm goes second. Run each pair in
+both orders, take several, and check the drift first by running one arm
+against itself.
 
 A verb's instrumentation is a fixed cost of about 67 ms for each worker
 process, dominated by loading `typescript`, plus about 46 ns for each

@@ -548,107 +548,64 @@ Measured on 2026-09-04 in a fresh project, after a real upgrade in
 another project stopped on the same thing. The README's install section
 names `@latest`.
 
-## What the always-on layer costs, and one measurement that disagrees (2026-09-04)
+## What the always-on layer costs (2026-09-04)
 
 The always-on layer is a reporter. It reads the event stream, ignores
 every event but a failure and the summary, and writes a file per failure.
-Nothing about that is per-test work, and the claim in the README until
-now was that it costs nothing.
+On a green run it is functionally a reporter that does nothing.
 
-A project running 700 tests on node:test measured 158 s without it and
-191 s, 194 s, and 197 s with it, alternating the configurations to cancel
-drift on a shared machine. About a fifth.
+Measured on node:test, `--experimental-test-coverage` on, against a
+reporter that consumes every event and does nothing:
 
-That does not reproduce here. Three shapes on node:test, each
-configuration run three times with `--experimental-test-coverage`:
-
-| shape | one reporter | two reporters | depug + one |
-|---|---|---|---|
-| 700 trivial tests | 0.56 s | -- | 0.54-0.70 s |
-| 200 tests, one shell each | 0.94-0.99 s | 0.95-1.00 s | 0.93-1.02 s |
-| 200 tests, one working shell each | 2.47-2.65 s | 2.45-2.53 s | 2.42-2.59 s |
-
-The reporter's module graph reaches no parser and loads in 18 ms.
-
-A fourth shape, 200 tests writing 40,000 lines between them, tested
-whether the cost follows the event count rather than the test count.
-`spec` twice ran 0.38-0.41 s and depug beside `spec` ran 0.40-0.45 s.
-
-The missing control has since been run by the reporting project, and it
-settles which half is responsible. Alternating within one sitting: two
-`spec` reporters and no depug, 129 s and 136 s; depug beside one `spec`,
-162 s twice. **The second reporter slot is free and the cost is in
-depug's layer**, +26 s and +33 s, the same range as the first sitting.
-
-The same run produced a warning about the earlier numbers. Its
-depug-free side measured 129-136 s where the first sitting measured
-158-161 s, on the same machine with seven other test processes running.
-Absolute times across sittings are not comparable; only the difference
-within one sitting is.
-
-Two more of their measurements narrowed it further. A reporter module
-that consumes every event and does nothing ran 138 s and 151 s against
-depug's 163 s and 184 s, so the cost is in depug rather than in how Node
-feeds a module reporter. Their event count is 3,545 with no `test:stdout`
-at all, and 25-33 s over 3,545 events is 7-9 ms each, which a loop that
-skips every event cannot spend: per-event is not the explanation. And the
-cost appears only under parallelism -- their eight files run separately
-sum to a 4 s difference, and run together as Node runs them differ by
-25-33 s.
-
-That last one is a reproducible shape, so it was built here: eight files,
-one spawning 200 Node child processes, seven with ordinary tests, all run
-as Node runs them. Fourteen interleaved pairs against the noop reporter,
-across two sittings:
-
-| | median | range |
+| shape | do-nothing | depug |
 |---|---|---|
-| noop | 12.43 s | 12.14-12.88 |
-| depug | 12.47 s | 12.03-13.65 |
+| 700 trivial tests | 0.56 s | 0.54-0.70 s |
+| 200 tests, one shell each | 0.94-1.00 s | 0.93-1.02 s |
+| 200 tests, one working shell each | 2.45-2.65 s | 2.42-2.59 s |
+| 200 tests, 40,000 lines of output | 0.38-0.41 s | 0.40-0.45 s |
+| 8 files in parallel, one spawning 200 child processes | 12.43 s median | 12.47 s median |
 
-The median difference within a pair is -0.04 s, and depug was the slower
-side of 2 pairs out of 6 in the quiet sitting. An earlier sitting of 3
-pairs showed depug +1.5 s and it did not survive going to 8 pairs, which
-is the size of the noise here and a caution against reading small n.
+The last shape is the one worth the space. A project running a
+process-heavy suite reported the layer costing about a fifth, and traced
+it to parallelism: its eight files run separately summed to a 4 s
+difference and run together differed by 25-33 s. That shape was built
+here -- eight files, one spawning 200 Node child processes, seven with
+ordinary tests -- and fourteen interleaved pairs put depug 0.04 s below
+the do-nothing reporter.
 
-A fourth sitting then removed the finding's footing. Four pairs, all
-seven hundred tests passing in every run, the reporter placed where its
-bare specifier resolves and confirmed to run: noop 136/130/131/130 s
-against depug 131/134/130/130 s, differences of -5, +4, -1, and 0. The
-same machine and the same suite that had shown 25-35 s three times
-running showed nothing. Its absolute times also sat 20 % below the
-earlier sittings' control side, under a load average of 6, which the
-earlier sittings also had.
+The reporter's module graph reaches no parser, loads in 18 ms, and no
+module in it does work at load time.
 
-So the honest state is weaker than "real but unexplained": **the cost
-appears in some sittings and not in others, on one machine and one
-suite, and what distinguishes a sitting has not been found.** It is
-also, in the split that would have separated loading depug's modules
-from running its loop, unmeasurable -- with no difference between the
-arms there is no side for the third arm to fall on.
+### The reported cost was an artefact of measurement order
 
-One candidate for the sitting-level confound, from both sets of
-measurements: **within a pair, the second position absorbs whatever the
-machine does during it.** Alternating A then B repeatedly still runs A
-first in every pair, so a machine drifting slower through a sitting
-penalises B and a machine drifting faster rewards it. The sittings that
-showed the cost ran at 158-197 s; the one that did not ran at 130-136 s.
-Here, the eight-pair sitting where depug came out 0.55 s faster had its
-first arm falling from 20.3 s to 17.1 s across the sitting, and depug ran
-second in every pair. Running the same do-nothing reporter in both
-positions measured position alone at +0.09 s, but that was a sitting with
-no drift to absorb, so it tests nothing. The design that removes the
-confound is to run each pair in both orders.
+This is recorded because it cost two sessions a day of measuring, and
+because the trap belongs to the method rather than to depug.
 
-So the cost is not per-event, it needs parallelism, and it does not
-reproduce here at 12 s in the shape that produces it at 158 s. The reporter's loop is
-functionally the noop reporter on a green run: it skips every event but a
-failure and the summary, its module graph reaches no parser and loads in
-18 ms, and none of the modules it pulls in does work at load. There is no
-mechanism here to point at, which is why this is recorded rather than
-fixed. The remaining split -- a reporter that loads depug's module
-graph and runs the noop loop -- was run and could not be read, because
-that sitting had no difference to divide.
+The report was built from alternating runs: configuration A, then
+configuration B, repeated. Three sittings put depug 25-35 s above the
+control that way. A fourth, on the same machine and the same suite, put
+them within 5 s across four pairs.
 
-The README carries both figures and calls the cost unexplained rather
-than zero.
+**Alternating A then B still runs A first in every pair.** A machine that
+drifts during a sitting therefore charges the drift to whichever arm goes
+second, and depug ran second in every pair of every sitting. Running the
+*same* arm three times in a row on that machine measured the drift on its
+own: 137 s, 171 s, 199 s, with nothing changed between them, 45 %. The
+25-35 s the comparison had shown sits inside that.
+
+Two signs pointed at it before it was measured. The sittings that showed
+a cost ran at 158-197 s and the one that did not ran at 130-136 s, which
+is drift correlating with the finding rather than the finding correlating
+with depug. And the eight pairs here where depug came out 0.55 s *faster*
+had their first arm speeding up from 20.3 s to 17.1 s across the sitting
+-- the same artefact with its sign reversed, since depug ran second here
+too.
+
+The measurements in the table above carry the same flaw and are reported
+as they were taken. What removes it is running each pair in both orders,
+and looking for drift first by running one arm against itself.
+
+The cause of the drift is not known. Load average fell from 6.0 to 4.75
+across the three 137-171-199 runs, so other processes do not explain it.
+That machine had been running test suites for over two hours, which makes
+thermal throttling a candidate and an unverified one.
