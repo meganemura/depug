@@ -7,12 +7,14 @@
 // one real codebase (honojs/hono at one pinned commit), 175 of 725
 // instrumented functions were anonymous, and 250 of them would have
 // shared an id under a name-only scheme.
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { instrumentSource } from "../src/transform.ts";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { createRuntime, type DepugRuntime } from "../src/runtime.ts";
 
 let tmpDir: string;
@@ -139,4 +141,76 @@ it("names a private method by its own name, not <computed>", async () => {
     .filter((e) => e.kind === "enter")
     .map((e) => e.fn.slice(e.fn.indexOf(":") + 1, e.fn.indexOf("@")));
   expect(names.sort()).toEqual(["#load", "#save", "run"]);
+});
+
+describe("the call counter, over any sequence of calls", () => {
+  it("numbers each function's calls from 1, without gaps or sharing", () =>
+    hegel.test((tc) => {
+      // `#k` is the whole addressing scheme. A gap or a shared counter
+      // makes an id point somewhere else on the next run.
+      const names = ["a", "b", "c"];
+      const sequence = tc.draw(gs.arrays(gs.sampledFrom(names), { maxSize: 60 }));
+      const runtime = createRuntime();
+
+      for (const name of sequence) {
+        const prefix = `f.ts:${name}@1:1#`;
+        const call = runtime.enter(prefix, 1, 1);
+        runtime.exit(prefix, 1, 1, "return", call);
+      }
+
+      const perName = new Map<string, string[]>();
+      for (const event of runtime.dump()) {
+        if (event.kind !== "enter") continue;
+        const prefix = event.fn.slice(0, event.fn.lastIndexOf("#"));
+        const list = perName.get(prefix) ?? [];
+        list.push(event.fn.slice(event.fn.lastIndexOf("#") + 1));
+        perName.set(prefix, list);
+      }
+
+      for (const [prefix, counters] of perName) {
+        const expected = sequence.filter((n) => prefix.includes(`:${n}@`)).length;
+        expect(counters).toEqual(Array.from({ length: expected }, (_, i) => String(i + 1)));
+      }
+    }));
+
+  it("names the call each new call began inside", () =>
+    hegel.test((tc) => {
+      // JavaScript runs one call chain at a time, so a call entered while
+      // another is running began inside it.
+      const depth = tc.draw(gs.integers({ minValue: 1, maxValue: 8 }));
+      const runtime = createRuntime();
+      const opened: string[] = [];
+
+      for (let i = 0; i < depth; i++) {
+        const prefix = `f.ts:fn${i}@1:1#`;
+        const call = runtime.enter(prefix, 1, 1);
+        opened.push(`${prefix}${call}`);
+      }
+
+      const enters = runtime.dump().filter((e) => e.kind === "enter");
+      expect(enters[0].parent).toBeNull();
+      for (let i = 1; i < depth; i++) {
+        expect(enters[i].parent).toBe(opened[i - 1]);
+      }
+    }));
+
+  it("does not let a suspended call claim what ran while it waited", () =>
+    hegel.test((tc) => {
+      // An `await` moves the boundary: a suspended call is not executing,
+      // so a call entered meanwhile did not begin inside it.
+      const runtime = createRuntime();
+      const outer = "f.ts:outer@1:1#";
+      const other = "f.ts:other@2:1#";
+
+      const call = runtime.enter(outer, 1, 1);
+      runtime.suspend(outer, 1, 1, call);
+      const otherCall = runtime.enter(other, 2, 1);
+      runtime.exit(other, 2, 1, "return", otherCall);
+      runtime.resume(outer, 1, 1, call, tc.draw(gs.integers()));
+      runtime.exit(outer, 1, 1, "return", call);
+
+      const enters = runtime.dump().filter((e) => e.kind === "enter");
+      expect(enters[1].fn.startsWith(other)).toBe(true);
+      expect(enters[1].parent).toBeNull();
+    }));
 });

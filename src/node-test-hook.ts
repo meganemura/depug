@@ -48,27 +48,43 @@ function sourceText(source: string | ArrayBufferView | undefined): string | unde
  */
 type Rewrite = (relativePath: string, source: string) => string | undefined;
 
-function framesMode(): { rewrite: Rewrite; flush: () => void } {
-  const runtime = installGlobalRuntime();
-  const includePrefix = process.env.DEPUG_INCLUDE ?? "src";
+/**
+ * What a mode does, separated from the act of installing it.
+ *
+ * The factories below decide and rewrite; the block at the bottom of this
+ * file is the only place that touches Node's module system or node:test's
+ * hooks. Keeping the decision out of the side effect is what lets a test
+ * ask "which files would this touch, and what would it write" without a
+ * runner in the room.
+ */
+export interface HookMode {
+  rewrite: Rewrite;
+  flush: () => void;
+  /** True where events should be attributed to the running test. */
+  attributesTests?: boolean;
+  setCurrentTest?: (name: string | null) => void;
+}
 
-  beforeEach((t: { name?: string }) => runtime.setCurrentTest(t?.name ?? null));
-  afterEach(() => runtime.setCurrentTest(null));
+function framesMode(env: NodeJS.ProcessEnv): HookMode {
+  const runtime = installGlobalRuntime();
+  const includePrefix = env.DEPUG_INCLUDE ?? "src";
 
   return {
+    attributesTests: true,
+    setCurrentTest: (name) => runtime.setCurrentTest(name),
     rewrite(relativePath, source) {
       if (!relativePath.startsWith(includePrefix)) return undefined;
       if (/\.(test|spec)\.tsx?$/.test(relativePath)) return undefined;
       return instrumentSource(source, relativePath).code;
     },
     flush() {
-      const dir = process.env.DEPUG_FRAMES_DIR;
+      const dir = env.DEPUG_FRAMES_DIR;
       if (dir) flushWorker(dir, runtime);
     },
   };
 }
 
-function probeMode(targets: string[]): { rewrite: Rewrite; flush: () => void } {
+function probeMode(targets: string[], env: NodeJS.ProcessEnv): HookMode {
   const runtime = installGlobalProbeRuntime();
   const files = new Set(targets.map((target) => target.slice(0, target.indexOf(":"))));
 
@@ -77,23 +93,22 @@ function probeMode(targets: string[]): { rewrite: Rewrite; flush: () => void } {
       if (!files.has(relativePath)) return undefined;
       const result = instrumentProbes(source, relativePath, targets);
       if (result.targets.length === 0) return undefined;
-      writeSidecar("targets", result.targets);
+      writeSidecar("targets", result.targets, env);
       return result.code;
     },
     flush() {
-      const dir = process.env.DEPUG_PROBE_DIR;
-      if (dir) writeSidecar("probe", runtime.dump());
+      if (env.DEPUG_PROBE_DIR) writeSidecar("probe", runtime.dump(), env);
     },
   };
 }
 
-function execMode(): { rewrite: Rewrite; flush: () => void } {
-  const prefix = process.env.DEPUG_EXEC_FID_PREFIX ?? "";
+function execMode(env: NodeJS.ProcessEnv): HookMode {
+  const prefix = env.DEPUG_EXEC_FID_PREFIX ?? "";
   const runtime = installGlobalExecRuntime({
     fidPrefix: prefix,
-    targetCall: Number(process.env.DEPUG_EXEC_CALL ?? "1"),
-    targetLine: Number(process.env.DEPUG_EXEC_LINE ?? "0"),
-    targetVisit: Number(process.env.DEPUG_EXEC_VISIT ?? "1"),
+    targetCall: Number(env.DEPUG_EXEC_CALL ?? "1"),
+    targetLine: Number(env.DEPUG_EXEC_LINE ?? "0"),
+    targetVisit: Number(env.DEPUG_EXEC_VISIT ?? "1"),
   });
   (globalThis as { __depugExecRender?: typeof renderExecValue }).__depugExecRender = renderExecValue;
 
@@ -108,13 +123,13 @@ function execMode(): { rewrite: Rewrite; flush: () => void } {
         name: match[2],
         line: Number(match[3]),
         column: Number(match[4]),
-        targetLine: Number(process.env.DEPUG_EXEC_LINE ?? "0"),
-        expression: process.env.DEPUG_EXEC_STATEMENT ?? "undefined",
+        targetLine: Number(env.DEPUG_EXEC_LINE ?? "0"),
+        expression: env.DEPUG_EXEC_STATEMENT ?? "undefined",
       });
       return result.injected ? result.code : undefined;
     },
     flush() {
-      const dir = process.env.DEPUG_EXEC_DIR;
+      const dir = env.DEPUG_EXEC_DIR;
       if (!dir) return;
       const lines = runtime.dump().map((record) => JSON.stringify(record));
       writeFile(dir, `exec-${process.pid}.jsonl`, lines.length === 0 ? "" : `${lines.join("\n")}\n`);
@@ -122,22 +137,18 @@ function execMode(): { rewrite: Rewrite; flush: () => void } {
   };
 }
 
-function fltMode(): { rewrite: Rewrite; flush: () => void } {
-  const runtime = installGlobalFltRuntime(
-    Number(process.env.DEPUG_FLT_TARGET_K ?? "0"),
-    DEFAULT_LIMITS,
-  );
+function fltMode(env: NodeJS.ProcessEnv): HookMode {
+  const runtime = installGlobalFltRuntime(Number(env.DEPUG_FLT_TARGET_K ?? "0"), DEFAULT_LIMITS);
   const target = {
-    path: process.env.DEPUG_FLT_PATH ?? "",
-    name: process.env.DEPUG_FLT_NAME ?? "",
-    line: Number(process.env.DEPUG_FLT_LINE ?? "0"),
-    column: Number(process.env.DEPUG_FLT_COLUMN ?? "0"),
+    path: env.DEPUG_FLT_PATH ?? "",
+    name: env.DEPUG_FLT_NAME ?? "",
+    line: Number(env.DEPUG_FLT_LINE ?? "0"),
+    column: Number(env.DEPUG_FLT_COLUMN ?? "0"),
   };
 
-  beforeEach((t: { name?: string }) => runtime.setCurrentTest(t?.name ?? null));
-  afterEach(() => runtime.setCurrentTest(null));
-
   return {
+    attributesTests: true,
+    setCurrentTest: (name) => runtime.setCurrentTest(name),
     rewrite(relativePath, source) {
       if (relativePath !== target.path) return undefined;
       const result = instrumentTarget(source, relativePath, {
@@ -148,15 +159,15 @@ function fltMode(): { rewrite: Rewrite; flush: () => void } {
       return result.found ? result.code : undefined;
     },
     flush() {
-      const dir = process.env.DEPUG_FLT_DIR;
+      const dir = env.DEPUG_FLT_DIR;
       if (dir) flushFltWorker(dir, runtime);
     },
   };
 }
 
 /** Writes one JSON file into the probe directory, named by process. */
-function writeSidecar(prefix: string, value: unknown): void {
-  const dir = process.env.DEPUG_PROBE_DIR;
+function writeSidecar(prefix: string, value: unknown, env: NodeJS.ProcessEnv): void {
+  const dir = env.DEPUG_PROBE_DIR;
   if (!dir) return;
   writeFile(dir, `${prefix}-${process.pid}.json`, JSON.stringify(value));
 }
@@ -166,16 +177,27 @@ function writeFile(dir: string, name: string, text: string): void {
   writeFileSync(join(dir, name), text);
 }
 
-function chooseMode(): { rewrite: Rewrite; flush: () => void } | undefined {
-  const probeTargets = process.env.DEPUG_PROBE_TARGETS;
-  if (probeTargets) return probeMode(JSON.parse(probeTargets) as string[]);
-  if (process.env.DEPUG_EXEC_FID_PREFIX) return execMode();
-  if (process.env.DEPUG_FLT_DIR) return fltMode();
-  if (process.env.DEPUG_FRAMES_DIR) return framesMode();
+/**
+ * Picks the mode from the variables a verb set, or undefined where none
+ * did. Takes the environment rather than reading the global one, so the
+ * choice can be exercised without a process to arrange.
+ */
+export function chooseMode(env: NodeJS.ProcessEnv): HookMode | undefined {
+  const probeTargets = env.DEPUG_PROBE_TARGETS;
+  if (probeTargets) return probeMode(JSON.parse(probeTargets) as string[], env);
+  if (env.DEPUG_EXEC_FID_PREFIX) return execMode(env);
+  if (env.DEPUG_FLT_DIR) return fltMode(env);
+  if (env.DEPUG_FRAMES_DIR) return framesMode(env);
   return undefined;
 }
 
-const mode = chooseMode();
+/** Rewrites one module, or returns undefined to leave it alone. */
+export function rewriteFor(mode: HookMode, root: string, path: string, text: string): string | undefined {
+  if (!/\.tsx?$/.test(path) || path.includes("/node_modules/")) return undefined;
+  return mode.rewrite(relative(root, path), text);
+}
+
+const mode = chooseMode(process.env);
 
 if (mode) {
   registerHooks({
@@ -183,18 +205,22 @@ if (mode) {
       const result = nextLoad(url, context);
       if (!url.startsWith("file:")) return result;
       const path = fileURLToPath(url);
-      if (!/\.tsx?$/.test(path) || path.includes(`${"/"}node_modules${"/"}`)) return result;
 
       const text = sourceText(result.source as string | ArrayBufferView | undefined);
       if (text === undefined) return result;
 
-      const rewritten = mode.rewrite(relative(root, path), text);
+      const rewritten = rewriteFor(mode, root, path, text);
       // The source goes back with its format untouched, so Node still
       // strips the types afterwards. depug rewrites TypeScript and hands
       // back TypeScript.
       return rewritten === undefined ? result : { ...result, source: rewritten };
     },
   });
+
+  if (mode.attributesTests && mode.setCurrentTest) {
+    beforeEach((t: { name?: string }) => mode.setCurrentTest!(t?.name ?? null));
+    afterEach(() => mode.setCurrentTest!(null));
+  }
 
   process.on("exit", () => mode.flush());
 }

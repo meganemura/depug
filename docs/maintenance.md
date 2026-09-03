@@ -33,6 +33,56 @@ They assert 188 files, 0 changed line counts, and 0 new syntax errors.
 shares it between both tests; reading each file with its own `git show`
 was one subprocess per file and pushed the suite past its timeout.
 
+## Property-based tests
+
+The suite uses [hegel](https://www.npmjs.com/package/@hegeldev/hegel) for
+properties, alongside the example tests. Both live in the same files: a
+property is a test like any other and belongs with the code it checks.
+
+The properties worth knowing about, because they hold the design up:
+
+- **The line count never changes**, over generated TypeScript rather than
+  only over fixtures and the corpus. Positions are embedded as literals
+  instead of recovered from a source map, so a rewrite that moved a line
+  would put every recorded coordinate one off with nothing to signal it.
+- **A `-t` pattern selects the test it names and no other.** This one
+  shipped broken: a pattern that is not escaped, or not anchored, selects
+  the wrong tests or none, and a fixture with plain ASCII names could not
+  show it.
+- **A function id survives being written and read back**, compared against
+  the value that went in rather than against the text that came out.
+  `format(parse(format(x))) === format(x)` holds even for a format that
+  drops a field, because it drops it both times.
+- **Counts cover every call while samples are capped.** Sampling the
+  counts would let a later null hide behind the cap and support a claim it
+  never happened.
+
+Writing them found a real defect: a probe passed its renderer a limits
+object with the wrong keys, so no sample was ever truncated and a
+5000-character argument went into the evidence file whole. Nothing in the
+suite type-checks the source, which is what would have caught it.
+
+## Coverage
+
+```sh
+npm run coverage
+```
+
+Around 91% of lines. What is left is mostly two shapes that a run in this
+process cannot reach:
+
+- The four `setupFiles` modules write their worker file from an `afterAll`
+  that only does anything when a verb has set its environment variable.
+  The functions they call are covered directly.
+- `src/node-test-hook.ts` registers Node's module hook and node:test's
+  hooks at the bottom of the file, which happens only inside the child a
+  verb starts. Its decisions -- which mode to run and which files to touch
+  -- are exported and covered.
+
+Both are exercised end to end by tests that spawn a real runner. Coverage
+in this process cannot attribute that, and raising the number by deleting
+the distinction would be worse than the number.
+
 ## The four rewrites, and the one rule they share
 
 Each verb that needs different instrumentation has its own rewrite, so the

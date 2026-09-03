@@ -8,10 +8,23 @@
 // that only reads it.
 import { beforeAll, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
+import {
+  buildRerunCommand,
+  buildSnapError,
+  buildTestNamePattern,
+  evidenceFileName,
+  linkLatest,
+  runDirName,
+  writeJson,
+  writeRunIndex,
+} from "../src/evidence.ts";
+import { hasProducerFrame, isAppFile, toEvidenceFrames } from "../src/stack.ts";
 import { runFixtureVitest, type FixtureRunResult } from "./support/run-fixture.ts";
 
 const FIXTURE_DIR = fileURLToPath(new URL("../fixtures/failing", import.meta.url));
@@ -208,4 +221,174 @@ describe("a rerun command for a test inside a describe", () => {
       /Tests\s+1 failed \| 1 skipped \(2\)/,
     );
   }, 90_000);
+});
+
+describe("the -t pattern selects the test it names, and nothing else", () => {
+  // This is the bug that shipped. vitest matches -t as a regular
+  // expression against the suite and test names joined by a space, and a
+  // pattern that is not escaped, or not anchored, selects the wrong tests
+  // or none. Generated names are the point: the failure needed a name with
+  // a regex metacharacter in it, and a hand-written fixture had none.
+  it("matches its own full name, for any names a suite could use", () =>
+    hegel.test((tc) => {
+      const depth = tc.draw(gs.integers({ minValue: 1, maxValue: 4 }));
+      const namePath = tc.draw(
+        gs.arrays(gs.text({ minSize: 1, maxSize: 30 }), { minSize: depth, maxSize: depth }),
+      );
+      const pattern = buildTestNamePattern(namePath);
+      expect(new RegExp(pattern).test(namePath.join(" "))).toBe(true);
+    }));
+
+  it("does not also select a test whose name merely starts with it", () =>
+    hegel.test((tc) => {
+      // Without anchors, "saves a draft" also selects "saves a draft and
+      // publishes it", and a rerun runs two tests while claiming one.
+      const namePath = tc.draw(gs.arrays(gs.text({ minSize: 1, maxSize: 20 }), { minSize: 1, maxSize: 3 }));
+      const suffix = tc.draw(gs.text({ minSize: 1, maxSize: 10 }));
+      const longer = `${namePath.join(" ")}${suffix}`;
+      tc.assume(longer !== namePath.join(" "));
+      expect(new RegExp(buildTestNamePattern(namePath)).test(longer)).toBe(false);
+    }));
+
+  it("puts the pattern into the command so it survives being read back", () =>
+    hegel.test((tc) => {
+      const namePath = tc.draw(gs.arrays(gs.text({ minSize: 1, maxSize: 20 }), { minSize: 1, maxSize: 3 }));
+      const command = buildRerunCommand({ testFile: "a.test.ts", namePath, seed: null });
+      // The command is text a person copies. Reading the -t argument back
+      // has to give the pattern, quotes and escapes intact.
+      //
+      // `[\s\S]` rather than `.`: a test name can contain U+2028, which
+      // JSON.stringify leaves raw and a JS regex's `.` does not match.
+      const quoted = /-t ([\s\S]*)$/.exec(command)![1];
+      expect(JSON.parse(quoted)).toBe(buildTestNamePattern(namePath));
+    }));
+});
+
+describe("naming an evidence file", () => {
+  it("produces a name a filesystem accepts, for any test name", () =>
+    hegel.test((tc) => {
+      // Test names carry anything: slashes, emoji, newlines, nothing at all.
+      const ordinal = tc.draw(gs.integers({ minValue: 1, maxValue: 999 }));
+      const name = tc.draw(gs.optional(gs.text()));
+      const fileName = evidenceFileName(ordinal, name);
+      expect(fileName).toMatch(/^\d{3}-[a-z0-9-]+\.json$/);
+      // The ordinal is what orders the directory, so it has to survive.
+      expect(fileName.slice(0, 3)).toBe(String(ordinal).padStart(3, "0"));
+    }));
+
+  it("gives two different failures two different files", () =>
+    hegel.test((tc) => {
+      // The ordinal exists so that two tests with the same name, or with
+      // names that slug to the same text, do not overwrite each other.
+      const a = tc.draw(gs.integers({ minValue: 1, maxValue: 999 }));
+      const b = tc.draw(gs.integers({ minValue: 1, maxValue: 999 }));
+      tc.assume(a !== b);
+      const name = tc.draw(gs.text());
+      expect(evidenceFileName(a, name)).not.toBe(evidenceFileName(b, name));
+    }));
+});
+
+describe("deciding which frames are the project's own", () => {
+  it("counts a file under the root and outside its dependencies", () =>
+    hegel.test((tc) => {
+      const segments = tc.draw(
+        gs.arrays(gs.text({ alphabet: "abcdef", minSize: 1, maxSize: 6 }), { minSize: 1, maxSize: 4 }),
+      );
+      const root = "/repo";
+      expect(isAppFile(root, `${root}/${segments.join("/")}.ts`)).toBe(true);
+      // A dependency is not the project's own code, at any depth.
+      expect(isAppFile(root, `${root}/node_modules/${segments.join("/")}.ts`)).toBe(false);
+      // Neither is anything outside the root.
+      expect(isAppFile(root, `/elsewhere/${segments.join("/")}.ts`)).toBe(false);
+    }));
+
+  it("keeps the frames in order and never invents one", () =>
+    hegel.test((tc) => {
+      const entries = tc.draw(
+        gs.arrays(
+          gs.record({
+            method: gs.text({ alphabet: "abc", maxSize: 5 }),
+            file: gs.text({ alphabet: "abc/", minSize: 1, maxSize: 10 }).map((p) => `/repo/${p}.ts`),
+            line: gs.integers({ minValue: 1, maxValue: 9999 }),
+            column: gs.integers({ minValue: 1, maxValue: 200 }),
+          }),
+          { maxSize: 30 },
+        ),
+      );
+      const limit = tc.draw(gs.integers({ minValue: 0, maxValue: 40 }));
+      const frames = toEvidenceFrames(entries, "/repo", limit);
+
+      expect(frames.length).toBe(Math.min(entries.length, limit));
+      frames.forEach((frame, index) => {
+        expect(frame.index).toBe(index);
+        expect(frame.line).toBe(entries[index].line);
+        // Paths come out relative, so an evidence file reads the same
+        // wherever the checkout is.
+        expect(frame.path?.startsWith("/")).toBe(false);
+      });
+    }));
+});
+
+describe("the pieces that write the run directory", () => {
+  it("names a run directory that sorts by time and stays unique per process", () =>
+    hegel.test((tc) => {
+      const pid = tc.draw(gs.integers({ minValue: 1, maxValue: 999999 }));
+      const stamp = tc.draw(gs.integers({ minValue: 0, maxValue: 2_000_000_000_000 }));
+      const name = runDirName(new Date(stamp), pid);
+      expect(name).toMatch(/^run-\d{8}-\d{6}-\d+$/);
+      // Two runs of the same process at the same second would collide, and
+      // two processes at the same second must not.
+      expect(name.endsWith(`-${pid}`)).toBe(true);
+    }));
+
+  it("keeps a long failure message but says it cut it", () =>
+    hegel.test((tc) => {
+      const limits = { max_frames: 20, max_value_length: 200, max_elements: 10, max_samples: 10 };
+      const length = tc.draw(gs.integers({ minValue: 0, maxValue: 3000 }));
+      const error = buildSnapError("AssertionError", "m".repeat(length), "stack", limits);
+
+      const allowance = limits.max_value_length * 5;
+      expect(error.message.length).toBeLessThanOrEqual(allowance);
+      // The flag and the original length are present exactly when
+      // something was cut, so a reader can tell a short message from a
+      // truncated one.
+      expect(error.message_truncated === true).toBe(length > allowance);
+      if (length > allowance) expect(error.message_original_length).toBe(length);
+    }));
+
+  it("writes an index whose every path opens", () => {
+    const dir = mkdtempSync(join(tmpdir(), "depug-index-"));
+    try {
+      writeJson(join(dir, "001-a.json"), { kind: "snap" });
+      const indexPath = writeRunIndex(dir, [
+        { path: "001-a.json", test: { framework: "vitest", name: "a", file: "a.ts", line: 1 },
+          error: { name: "E", message: "m" } },
+      ]);
+      const index = JSON.parse(readFileSync(indexPath, "utf8"));
+      expect(index.failures).toHaveLength(1);
+      expect(JSON.parse(readFileSync(join(dir, index.failures[0].path), "utf8")).kind).toBe("snap");
+
+      // `latest` points at the run that just finished.
+      linkLatest(dir, dir);
+      expect(realpathSync(join(dir, "latest"))).toBe(realpathSync(dir));
+      // Pointing it a second time replaces it rather than failing.
+      linkLatest(dir, dir);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("says whether the snapshot holds the code that produced the value", () =>
+    hegel.test((tc) => {
+      const testFile = "a.test.ts";
+      const producers = tc.draw(gs.integers({ minValue: 0, maxValue: 5 }));
+      const frames = [
+        ...Array.from({ length: producers }, (_, i) => ({
+          index: i, path: "src/app.ts", line: i + 1, column: 1, name: "f", app: true,
+        })),
+        { index: producers, path: testFile, line: 1, column: 1, name: null, app: true },
+      ];
+      // This is what decides which of the two lines a failure prints.
+      expect(hasProducerFrame(frames, testFile)).toBe(producers > 0);
+    }));
 });

@@ -13,6 +13,10 @@ import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
+import { parseStack } from "../src/stack-parse.ts";
+import { chooseMode, rewriteFor } from "../src/node-test-hook.ts";
 import { detectRunner, withNodeTestHook } from "../src/runner.ts";
 import { runFrames } from "../src/verbs/frames.ts";
 import { runProbe } from "../src/verbs/probe.ts";
@@ -175,4 +179,134 @@ describe("the always-on layer under node --test", () => {
     // The file holds two failing tests; the command runs one.
     expect(`${result.stdout}${result.stderr}`).toMatch(/^# tests 1$/m);
   }, 90_000);
+});
+
+describe("reading a V8 stack string", () => {
+  it("never throws, whatever text it is handed", () =>
+    hegel.test((tc) => {
+      // The string comes from a runner, and a runner that changes its
+      // format should not take the reporter down with it.
+      const stack = tc.draw(gs.text());
+      const entries = parseStack(stack);
+      for (const entry of entries) {
+        expect(Number.isFinite(entry.line)).toBe(true);
+        expect(Number.isFinite(entry.column)).toBe(true);
+      }
+    }));
+
+  it("reads back the positions of frames it was given", () =>
+    hegel.test((tc) => {
+      // Build a stack the way V8 writes one, then check the positions
+      // survive the parse.
+      const frames = tc.draw(
+        gs.arrays(
+          gs.record({
+            method: gs.sampledFrom(["fn", "Object.run", "<anonymous>", ""]),
+            file: gs.text({ alphabet: "abc", minSize: 1, maxSize: 8 }),
+            line: gs.integers({ minValue: 1, maxValue: 99999 }),
+            column: gs.integers({ minValue: 1, maxValue: 999 }),
+          }),
+          { minSize: 1, maxSize: 12 },
+        ),
+      );
+
+      const text = [
+        "Error: something went wrong",
+        ...frames.map((f) =>
+          f.method === ""
+            ? `    at file:///src/${f.file}.ts:${f.line}:${f.column}`
+            : `    at ${f.method} (file:///src/${f.file}.ts:${f.line}:${f.column})`,
+        ),
+        // Node's own frames are dropped: they can never be app code, and a
+        // reader should not step over the runner's internals.
+        "    at Test.run (node:internal/test_runner/test:1397:25)",
+      ].join("\n");
+
+      const parsed = parseStack(text);
+      expect(parsed).toHaveLength(frames.length);
+      parsed.forEach((entry, index) => {
+        expect(entry.line).toBe(frames[index].line);
+        expect(entry.column).toBe(frames[index].column);
+        expect(entry.file).toBe(`/src/${frames[index].file}.ts`);
+      });
+    }));
+
+  it("keeps the first line, the error's own message, out of the frames", () =>
+    hegel.test((tc) => {
+      // A message can look like anything, including like a frame.
+      const message = tc.draw(gs.text({ maxSize: 60 }));
+      const parsed = parseStack(`Error: ${message}`);
+      expect(parsed).toEqual([]);
+    }));
+});
+
+describe("choosing what to do from the variables a verb set", () => {
+  const ROOT = "/repo";
+  const SOURCE = ["export function f(n: number): number {", "  return n + 1;", "}", ""].join("\n");
+
+  it("does nothing at all when no verb asked for anything", () => {
+    // The hook is preloaded by NODE_OPTIONS, which a project may have set
+    // for its own reasons. Loading it must not instrument anything.
+    expect(chooseMode({})).toBeUndefined();
+  });
+
+  it("builds the call index when a frames directory is named", () => {
+    const mode = chooseMode({ DEPUG_FRAMES_DIR: "/tmp/x", DEPUG_INCLUDE: "src" })!;
+    expect(mode.attributesTests).toBe(true);
+    expect(rewriteFor(mode, ROOT, `${ROOT}/src/a.ts`, SOURCE)).toContain("__depug.enter");
+    // Outside the include path, inside a dependency, or not TypeScript.
+    expect(rewriteFor(mode, ROOT, `${ROOT}/other/a.ts`, SOURCE)).toBeUndefined();
+    expect(rewriteFor(mode, ROOT, `${ROOT}/node_modules/x/a.ts`, SOURCE)).toBeUndefined();
+    expect(rewriteFor(mode, ROOT, `${ROOT}/src/a.css`, SOURCE)).toBeUndefined();
+    expect(rewriteFor(mode, ROOT, `${ROOT}/src/a.test.ts`, SOURCE)).toBeUndefined();
+  });
+
+  it("probes only the file holding a target", () => {
+    const mode = chooseMode({ DEPUG_PROBE_TARGETS: JSON.stringify(["src/a.ts:f@1:17"]) })!;
+    expect(rewriteFor(mode, ROOT, `${ROOT}/src/a.ts`, SOURCE)).toContain("__depugProbe.enter");
+    expect(rewriteFor(mode, ROOT, `${ROOT}/src/b.ts`, SOURCE)).toBeUndefined();
+  });
+
+  it("traces only its target, and attributes events to a test", () => {
+    const mode = chooseMode({
+      DEPUG_FLT_DIR: "/tmp/x", DEPUG_FLT_PATH: "src/a.ts", DEPUG_FLT_NAME: "f",
+      DEPUG_FLT_LINE: "1", DEPUG_FLT_COLUMN: "17", DEPUG_FLT_TARGET_K: "1",
+    })!;
+    expect(mode.attributesTests).toBe(true);
+    expect(rewriteFor(mode, ROOT, `${ROOT}/src/a.ts`, SOURCE)).toContain("__depug_flt");
+    expect(rewriteFor(mode, ROOT, `${ROOT}/src/b.ts`, SOURCE)).toBeUndefined();
+  });
+
+  it("injects only at its target's line, and attributes nothing", () => {
+    const mode = chooseMode({
+      DEPUG_EXEC_FID_PREFIX: "src/a.ts:f@1:17#", DEPUG_EXEC_CALL: "1",
+      DEPUG_EXEC_LINE: "2", DEPUG_EXEC_VISIT: "1", DEPUG_EXEC_STATEMENT: "n = 9",
+      DEPUG_EXEC_DIR: "/tmp/x",
+    })!;
+    // exec addresses one call by index; it has no use for a test window.
+    expect(mode.attributesTests).toBeUndefined();
+    expect(rewriteFor(mode, ROOT, `${ROOT}/src/a.ts`, SOURCE)).toContain("__depugExec.shouldRun");
+    expect(rewriteFor(mode, ROOT, `${ROOT}/src/b.ts`, SOURCE)).toBeUndefined();
+  });
+
+  it("keeps the line count whichever mode is chosen", () =>
+    hegel.test((tc) => {
+      const extra = tc.draw(gs.integers({ minValue: 0, maxValue: 5 }));
+      const body = Array.from({ length: extra }, (_, i) => `  const v${i} = ${i};`);
+      const source = ["export function f(n: number): number {", ...body, "  return n + 1;", "}", ""].join("\n");
+
+      const modes = [
+        chooseMode({ DEPUG_FRAMES_DIR: "/tmp/x", DEPUG_INCLUDE: "src" })!,
+        chooseMode({ DEPUG_PROBE_TARGETS: JSON.stringify(["src/a.ts:f@1:17"]) })!,
+        chooseMode({
+          DEPUG_FLT_DIR: "/tmp/x", DEPUG_FLT_PATH: "src/a.ts", DEPUG_FLT_NAME: "f",
+          DEPUG_FLT_LINE: "1", DEPUG_FLT_COLUMN: "17", DEPUG_FLT_TARGET_K: "1",
+        })!,
+      ];
+      for (const mode of modes) {
+        const code = rewriteFor(mode, ROOT, `${ROOT}/src/a.ts`, source);
+        expect(code).toBeDefined();
+        expect(code!.split("\n")).toHaveLength(source.split("\n").length);
+      }
+    }));
 });

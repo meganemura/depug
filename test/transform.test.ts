@@ -13,6 +13,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import ts from "typescript";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { instrumentSource } from "../src/transform.ts";
 import { createRuntime, type DepugRuntime } from "../src/runtime.ts";
 
@@ -212,3 +215,108 @@ describe("functions that are not plain declarations", () => {
     expect(names).toEqual(["constructor", "value", "value"]);
   });
 });
+
+/**
+ * Generates small but structurally varied TypeScript, so the line-count
+ * invariant is checked against shapes nobody wrote down.
+ *
+ * The corpus test covers one real codebase; this covers combinations that
+ * codebase happens not to contain. Both matter: the empty-body collision
+ * came from real code, and the shapes below are how a rewrite meets a
+ * `switch` inside a `catch` inside a loop without waiting for someone to
+ * commit one.
+ */
+function drawStatements(tc: { draw: <T>(g: gs.Generator<T>) => T }, depth: number, indent: string): string[] {
+  const count = tc.draw(gs.integers({ minValue: 0, maxValue: 3 }));
+  const out: string[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const kind = tc.draw(
+      gs.sampledFrom(
+        depth > 0
+          ? (["const", "if", "loop", "try", "switch", "return", "throw", "empty", "nested"] as const)
+          : (["const", "return", "throw", "empty"] as const),
+      ),
+    );
+    const inner = depth > 0 ? drawStatements(tc, depth - 1, `${indent}  `) : [];
+
+    if (kind === "const") out.push(`${indent}const v${i} = ${i} + 1;`);
+    else if (kind === "return") out.push(`${indent}return ${i};`);
+    else if (kind === "throw") out.push(`${indent}throw new Error("e${i}");`);
+    else if (kind === "empty") out.push(`${indent}{}`);
+    else if (kind === "if") {
+      out.push(`${indent}if (${i} > 0) {`, ...inner, `${indent}}`);
+    } else if (kind === "loop") {
+      out.push(`${indent}for (const x${i} of [1, 2]) {`, ...inner, `${indent}}`);
+    } else if (kind === "try") {
+      out.push(`${indent}try {`, ...inner, `${indent}} catch (e${i}) {`, ...inner, `${indent}}`);
+    } else if (kind === "switch") {
+      out.push(`${indent}switch (${i}) {`, `${indent}  case 1: {`, ...inner, `${indent}    break;`, `${indent}  }`, `${indent}}`);
+    } else {
+      out.push(`${indent}function nested${i}(): void {`, ...inner, `${indent}}`);
+    }
+  }
+  return out;
+}
+
+const sourceGenerator = gs.composite<string>((tc) => {
+  const shape = tc.draw(
+    gs.sampledFrom(["declaration", "arrow-block", "arrow-expression", "method", "async"] as const),
+  );
+  const body = drawStatements(tc, tc.draw(gs.integers({ minValue: 0, maxValue: 3 })), "  ");
+
+  if (shape === "arrow-expression") return `export const f = (n: number) => n + 1;\n`;
+  if (shape === "arrow-block") return `export const f = (n: number): void => {\n${body.join("\n")}\n};\n`;
+  if (shape === "method") {
+    return `export class C {\n  m(n: number): void {\n${body.map((l) => `  ${l}`).join("\n")}\n  }\n  #p(): void {}\n  get g(): number { return 1; }\n}\n`;
+  }
+  if (shape === "async") {
+    return `export async function f(n: number): Promise<void> {\n  await Promise.resolve(n);\n${body.join("\n")}\n}\n`;
+  }
+  return `export function f(n: number): void {\n${body.join("\n")}\n}\n`;
+});
+
+describe("the invariant the whole design rests on", () => {
+  it("keeps the line count for any shape of TypeScript", () =>
+    hegel.test((tc) => {
+      // Positions are embedded as literals rather than recovered from a
+      // source map, so a rewrite that moved a line would put every
+      // recorded coordinate one off with nothing to signal it.
+      const source = tc.draw(sourceGenerator);
+      const { code } = instrumentSource(source, "g.ts");
+      expect(code.split("\n")).toHaveLength(source.split("\n").length);
+    }));
+
+  it("produces code that still parses, for any shape of TypeScript", () =>
+    hegel.test((tc) => {
+      const source = tc.draw(sourceGenerator);
+      const before = ts.createSourceFile("g.ts", source, ts.ScriptTarget.Latest, true);
+      // The generator only builds valid programs; if that ever stops being
+      // true this check would blame the transform for the generator.
+      expect(diagnosticCount(before)).toBe(0);
+
+      const { code } = instrumentSource(source, "g.ts");
+      const after = ts.createSourceFile("g.ts", code, ts.ScriptTarget.Latest, true);
+      expect(diagnosticCount(after)).toBe(0);
+    }));
+
+  it("reports every function it rewrote at a line that exists", () =>
+    hegel.test((tc) => {
+      const source = tc.draw(sourceGenerator);
+      const lineCount = source.split("\n").length;
+      for (const fn of instrumentSource(source, "g.ts").functions) {
+        expect(fn.line).toBeGreaterThanOrEqual(1);
+        expect(fn.line).toBeLessThanOrEqual(lineCount);
+        expect(fn.column).toBeGreaterThanOrEqual(1);
+        // The id has to name that same position, or a verb aimed with it
+        // reads a different function.
+        expect(fn.idPrefix).toBe(`g.ts:${fn.name}@${fn.line}:${fn.column}#`);
+      }
+    }));
+});
+
+/** The parser's own diagnostics, which are not on the public type. */
+function diagnosticCount(sourceFile: ts.SourceFile): number {
+  return (sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] })
+    .parseDiagnostics?.length ?? 0;
+}

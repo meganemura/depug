@@ -8,8 +8,11 @@ import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { declaredSignatureOf } from "../src/declared-type.ts";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { observeAll } from "../src/observed-shape.ts";
 import { compareShape, renderDeclared, renderObserved } from "../src/shape-report.ts";
+import type { Kind } from "../src/declared-type.ts";
 import * as app from "../fixtures/types/src/app.ts";
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/types/src/app.ts", import.meta.url));
@@ -124,4 +127,65 @@ describe("observed shape against declared type, on values the fixture really pro
     const declared = declaredOf("fromAny").parameters[0].type;
     expect(compareShape(observeAll([{ id: 1 }, "not an object", null]), declared)).toEqual([]);
   });
+});
+
+describe("observing values", () => {
+  it("counts every value it was shown", () =>
+    hegel.test((tc) => {
+      // Counts cover every call: sampling them would let a later null hide
+      // and support a claim that it never happened.
+      const values = tc.draw(
+        gs.arrays(
+          gs.sampledFrom<unknown>([1, "a", true, null, undefined, {}, [], 1n]),
+          { maxSize: 40 },
+        ),
+      );
+      const shape = observeAll(values);
+      expect(shape.samples).toBe(values.length);
+      const counted = Object.values(shape.kinds).reduce((a, b) => a + b, 0);
+      expect(counted).toBe(values.length);
+    }));
+
+  it("accounts for every sample of every property, present or absent", () =>
+    hegel.test((tc) => {
+      // A property seen in 2 of 5 calls has to read as "sometimes missing",
+      // not as "always a string". That only works if seen plus absent is
+      // the whole sample count.
+      const objects = tc.draw(
+        gs.arrays(
+          gs.maps(gs.sampledFrom(["a", "b", "c"]), gs.integers({ minValue: 0, maxValue: 9 }), { maxSize: 3 })
+            .map((m) => Object.fromEntries(m)),
+          { minSize: 1, maxSize: 20 },
+        ),
+      );
+      const shape = observeAll(objects);
+      for (const property of Object.values(shape.properties)) {
+        const seen = Object.values(property.kinds).reduce((a, b) => a + b, 0);
+        expect(seen + property.absent).toBe(shape.samples);
+      }
+    }));
+
+  it("stays silent where the declaration stopped making a claim", () =>
+    hegel.test((tc) => {
+      // `any` and `unknown` accept every runtime kind, so nothing observed
+      // can disagree with them. A mismatch reported there would be noise a
+      // reader has to learn to ignore.
+      const values = tc.draw(
+        gs.arrays(gs.sampledFrom<unknown>([1, "a", true, null, undefined, { x: 1 }, []]), { maxSize: 20 }),
+      );
+      const accepts = tc.draw(gs.sampledFrom<"any" | "unknown">(["any", "unknown"]));
+      expect(compareShape(observeAll(values), { form: "primitive", kinds: [accepts] })).toEqual([]);
+    }));
+
+  it("never reports a mismatch for a value the declaration does allow", () =>
+    hegel.test((tc) => {
+      // The control, generalised: build the declared type out of the kinds
+      // that actually arrived, and nothing should disagree.
+      const values = tc.draw(
+        gs.arrays(gs.sampledFrom<unknown>([1, "a", true, null, 2n]), { minSize: 1, maxSize: 20 }),
+      );
+      const shape = observeAll(values);
+      const kinds = Object.keys(shape.kinds) as Kind[];
+      expect(compareShape(shape, { form: "primitive", kinds })).toEqual([]);
+    }));
 });

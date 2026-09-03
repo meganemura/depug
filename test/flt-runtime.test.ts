@@ -5,8 +5,20 @@
 // secrets, truncation) from whatever the transform happens to generate,
 // so a runtime bug and a transform bug cannot mask each other.
 import { describe, expect, it } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { createFltRuntime, type FltLineRecord, type FltRecord } from "../src/flt-runtime.ts";
-import { isSecretName } from "../src/flt-render.ts";
+import {
+  isSecretName,
+  renderNamed,
+  renderValue,
+  renderedEqual,
+  type FltLimits,
+} from "../src/flt-render.ts";
+
+// The renderer's own limits, which are not the same shape as the evidence
+// file's `limits` object the runtime takes.
+const RENDER_LIMITS: FltLimits = { max_value_length: 200, max_elements: 10 };
 
 const LIMITS = { max_value_length: 20, max_elements: 3 };
 
@@ -145,4 +157,46 @@ describe("rendering limits", () => {
     const call = records[0] as Extract<FltRecord, { type: "call" }>;
     expect(call.locals.text).toMatchObject({ truncated: true, original_length: 52 }); // 50 chars + 2 quotes
   });
+});
+
+describe("rendering a captured value", () => {
+  it("withholds anything whose name reads as a secret", () =>
+    hegel.test((tc) => {
+      // The check is on the name, before the value is rendered, so a
+      // secret is never turned into a string in the first place.
+      const stem = tc.draw(
+        gs.sampledFrom(["password", "passwd", "secret", "token", "apiKey", "api_key",
+          "credential", "auth", "session", "cookie", "key"]),
+      );
+      const prefix = tc.draw(gs.text({ alphabet: "abc", maxSize: 5 }));
+      const value = tc.draw(gs.sampledFrom<unknown>(["hunter2", 42, { a: 1 }, null]));
+
+      expect(isSecretName(`${prefix}${stem}`)).toBe(true);
+      const rendered = renderNamed(`${prefix}${stem}`, value, RENDER_LIMITS);
+      expect("value" in rendered).toBe(false);
+    }));
+
+  it("never throws, and stays inside the length it promises", () =>
+    hegel.test((tc) => {
+      const value = tc.draw(
+        gs.sampledFrom<unknown>([
+          "", "x".repeat(5000), 0, -0, NaN, Infinity, true, null, undefined,
+          9n, Symbol("s"), () => 0, [1, [2, [3]]], { a: { b: 1 } }, new Map(),
+        ]),
+      );
+      const rendered = renderValue(value, RENDER_LIMITS);
+      if ("value" in rendered) {
+        expect(typeof rendered.value).toBe("string");
+        expect(rendered.value.length).toBeLessThanOrEqual(RENDER_LIMITS.max_value_length + 1);
+      }
+    }));
+
+  it("calls two renderings equal exactly when they say the same thing", () =>
+    hegel.test((tc) => {
+      // The differential record only writes what changed, so an equality
+      // that said "different" for identical values would fill a trace with
+      // changes that did not happen.
+      const value = tc.draw(gs.sampledFrom<unknown>([1, "a", true, null, undefined, 2n]));
+      expect(renderedEqual(renderValue(value, RENDER_LIMITS), renderValue(value, RENDER_LIMITS))).toBe(true);
+    }));
 });

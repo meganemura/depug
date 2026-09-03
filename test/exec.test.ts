@@ -4,6 +4,8 @@
 // launcher arming it.
 import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { createExecRuntime, renderExecValue } from "../src/exec-runtime.ts";
 import { instrumentExec } from "../src/exec-transform.ts";
 import { readFileSync } from "node:fs";
@@ -142,4 +144,95 @@ describe("exec through the command line", () => {
     expect(exec("--statement", "total = 1").stdout).toContain("exec needs --line");
     expect(exec("--line", "21").stdout).toContain("exec needs --statement");
   });
+});
+
+describe("rendering a value for a record", () => {
+  it("never throws, and never exceeds the length it promises", () =>
+    hegel.test((tc) => {
+      // A record that lost its whole run because one value refused to
+      // render would be worse than a record saying it could not show it.
+      const value = tc.draw(
+        gs.sampledFrom<unknown>([
+          1, -0, NaN, Infinity, "", "x".repeat(1000), true, null, undefined,
+          123n, Symbol("s"), () => 0, [1, 2, 3], { a: 1 }, new Date(0),
+        ]),
+      );
+      const max = tc.draw(gs.integers({ minValue: 1, maxValue: 300 }));
+      const rendered = renderExecValue(value, max);
+      expect(typeof rendered).toBe("string");
+      // One extra character for the ellipsis that marks the truncation.
+      expect(rendered.length).toBeLessThanOrEqual(max + 1);
+    }));
+
+  it("survives a value that cannot be serialised at all", () =>
+    hegel.test((tc) => {
+      // A cycle, and an object whose own accessors throw. Both reach a
+      // renderer eventually, and neither is the test's problem to avoid.
+      const depth = tc.draw(gs.integers({ minValue: 1, maxValue: 5 }));
+      const cyclic: Record<string, unknown> = {};
+      let node = cyclic;
+      for (let i = 0; i < depth; i++) {
+        node.next = {};
+        node = node.next as Record<string, unknown>;
+      }
+      node.back = cyclic;
+      expect(renderExecValue(cyclic)).toBe("<render threw>");
+
+      const hostile = {
+        get boom() {
+          throw new Error("no");
+        },
+      };
+      expect(typeof renderExecValue(hostile)).toBe("string");
+    }));
+});
+
+describe("the visit counter", () => {
+  it("fires on exactly one visit, whatever the sequence", () =>
+    hegel.test((tc) => {
+      // The whole point of the address is that it names one moment. Firing
+      // twice would evaluate a caller's expression somewhere they did not
+      // ask for.
+      const targetCall = tc.draw(gs.integers({ minValue: 1, maxValue: 5 }));
+      const targetVisit = tc.draw(gs.integers({ minValue: 1, maxValue: 5 }));
+      const calls = tc.draw(gs.integers({ minValue: 1, maxValue: 6 }));
+      const visitsPerCall = tc.draw(gs.integers({ minValue: 1, maxValue: 6 }));
+
+      const runtime = createExecRuntime({
+        fidPrefix: "a.ts:f@1:1#",
+        targetCall,
+        targetLine: 5,
+        targetVisit,
+        armed: true,
+      });
+
+      let fired = 0;
+      for (let call = 0; call < calls; call++) {
+        const handle = runtime.enter();
+        for (let visit = 0; visit < visitsPerCall; visit++) {
+          if (runtime.shouldRun(handle, 5)) fired += 1;
+          // A visit to another line never advances the counter.
+          expect(runtime.shouldRun(handle, 6)).toBe(false);
+        }
+      }
+
+      const reachable = targetCall <= calls && targetVisit <= visitsPerCall;
+      expect(fired).toBe(reachable ? 1 : 0);
+    }));
+
+  it("evaluates nothing at all when the launcher did not arm it", () =>
+    hegel.test((tc) => {
+      const calls = tc.draw(gs.integers({ minValue: 1, maxValue: 5 }));
+      const runtime = createExecRuntime({
+        fidPrefix: "a.ts:f@1:1#",
+        targetCall: 1,
+        targetLine: 5,
+        targetVisit: 1,
+        armed: false,
+      });
+      for (let call = 0; call < calls; call++) {
+        const handle = runtime.enter();
+        expect(runtime.shouldRun(handle, 5)).toBe(false);
+      }
+    }));
 });

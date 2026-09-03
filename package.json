@@ -24,12 +24,15 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "coverage": "vitest run --coverage"
   },
   "peerDependencies": {
     "typescript": ">=5.5.4 <7.0.0"
   },
   "devDependencies": {
+    "@hegeldev/hegel": "0.4.5",
+    "@vitest/coverage-v8": "4.1.11",
     "typescript": "6.0.3",
     "vitest": "4.1.11"
   }

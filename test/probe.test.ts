@@ -9,7 +9,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { instrumentProbes } from "../src/probe-transform.ts";
-import { createProbeRuntime } from "../src/probe-runtime.ts";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
+import { MAX_SAMPLES, PROBE_LIMITS, createProbeRuntime } from "../src/probe-runtime.ts";
 import { runProbe } from "../src/verbs/probe.ts";
 
 const FIXTURE_DIR = fileURLToPath(new URL("../fixtures/probe", import.meta.url));
@@ -128,4 +130,66 @@ describe("probing a function whose declared type is wrong", () => {
     expect(result.output.targets_not_found).toEqual(["src/app.ts:noSuchFunction@1:1"]);
     expect(result.output.functions).toEqual({});
   }, 120_000);
+});
+
+describe("what a probe records over many calls", () => {
+  it("counts every call, and caps only the values it renders", () =>
+    hegel.test((tc) => {
+      // Counts cover every call; samples are capped. Sampling the counts
+      // would let a later null hide behind the cap and support a claim it
+      // never happened.
+      const calls = tc.draw(gs.integers({ minValue: 0, maxValue: 40 }));
+      const runtime = createProbeRuntime();
+      for (let i = 0; i < calls; i++) {
+        runtime.enter("a.ts:f@1:1", ["n"], [i]);
+        runtime.exitReturn("a.ts:f@1:1", i);
+      }
+      if (calls === 0) {
+        expect(runtime.dump()).toEqual({});
+        return;
+      }
+
+      const record = runtime.dump()["a.ts:f@1:1"];
+      expect(record.calls).toBe(calls);
+      expect(record.parameters[0].observed.samples).toBe(calls);
+      expect(record.parameters[0].samples.length).toBe(Math.min(calls, MAX_SAMPLES));
+      // Every value past the cap is counted rather than dropped silently.
+      expect(record.parameters[0].samples.length + record.parameters[0].samples_omitted).toBe(calls);
+    }));
+
+  it("keeps a throw apart from a return of nothing", () =>
+    hegel.test((tc) => {
+      // A raised exit is not a return of undefined. Folding them together
+      // would read as "this sometimes returns nothing" for a function that
+      // sometimes fails.
+      const returns = tc.draw(gs.integers({ minValue: 0, maxValue: 10 }));
+      const throws = tc.draw(gs.integers({ minValue: 0, maxValue: 10 }));
+      const runtime = createProbeRuntime();
+
+      for (let i = 0; i < returns; i++) {
+        runtime.enter("a.ts:f@1:1", [], []);
+        runtime.exitReturn("a.ts:f@1:1", undefined);
+      }
+      for (let i = 0; i < throws; i++) {
+        runtime.enter("a.ts:f@1:1", [], []);
+        runtime.exitThrow("a.ts:f@1:1");
+      }
+      if (returns + throws === 0) return;
+
+      const record = runtime.dump()["a.ts:f@1:1"];
+      expect(record.calls).toBe(returns + throws);
+      expect(record.threw).toBe(throws);
+      expect(record.returns.observed.samples).toBe(returns);
+    }));
+
+  it("renders no value longer than the limit it publishes", () =>
+    hegel.test((tc) => {
+      // A record is read by an agent and by a person. A single argument
+      // that arrived as a megabyte of text should not become the file.
+      const size = tc.draw(gs.integers({ minValue: 0, maxValue: 3000 }));
+      const runtime = createProbeRuntime();
+      runtime.enter("a.ts:f@1:1", ["s"], ["x".repeat(size)]);
+      const sample = runtime.dump()["a.ts:f@1:1"].parameters[0].samples[0];
+      expect(sample.length).toBeLessThanOrEqual(PROBE_LIMITS.max_value_length + 1);
+    }));
 });

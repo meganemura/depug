@@ -5,7 +5,9 @@
 // line/column literals survive vite/esbuild for flt's own transform, the
 // way test/wrapper-config.test.ts proves it for the always-on one.
 import { describe, expect, it } from "vitest";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { run } from "../src/cli.ts";
 
@@ -181,5 +183,46 @@ describe("where a call left from", () => {
 
     const source = readFileSync(`${FIXTURE_DIR}/src/app.ts`, "utf8").split("\n");
     expect(source[(thrown.line as number) - 1]).toContain("throw new Error");
+  }, 120_000);
+});
+
+describe("the code-state gate on an index", () => {
+  it("warns and continues where a code state cannot be read at all", () => {
+    // A repository without git, or an index written before the marker
+    // existed, is not a mismatch. Refusing there would block a verb over a
+    // question nobody can answer.
+    const dir = mkdtempSync(join(tmpdir(), "depug-index-"));
+    try {
+      const indexPath = join(dir, "frames.jsonl");
+      writeFileSync(indexPath, `${JSON.stringify({
+        type: "envelope", schema_version: 1, code_state: { git_sha: null, dirty_digest: null },
+      })}\n`);
+
+      const fid = fidFor(readRecords(framesFile()), "classify", 1);
+      const result = cli("flt", fid, "--index", indexPath);
+      expect(result.stdout).toContain("could not be read");
+      // Continuing means it still produced a trace.
+      expect(result.stdout).toContain("depug flt:");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it("names the index it refused, so a reader knows which one to rebuild", () => {
+    const dir = mkdtempSync(join(tmpdir(), "depug-index-"));
+    try {
+      const indexPath = join(dir, "frames.jsonl");
+      writeFileSync(indexPath, `${JSON.stringify({
+        type: "envelope", schema_version: 1,
+        code_state: { git_sha: "0".repeat(40), dirty_digest: "clean" },
+      })}\n`);
+
+      const result = cli("flt", "src/app.ts:classify@4:17#1", "--index", indexPath);
+      expect(result.stdout).toContain("depug flt: refused");
+      expect(result.stdout).toContain(indexPath);
+      expect(result.stdout).toContain("depug result: refused");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }, 120_000);
 });

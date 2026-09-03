@@ -21,8 +21,8 @@ import { emptyShape, observe, type ObservedShape } from "./observed-shape.ts";
 import { isSecretName, renderValue, type FltLimits } from "./flt-render.ts";
 
 export const PROBE_LIMITS: FltLimits = {
-  maxValueLength: 200,
-  maxElements: 10,
+  max_value_length: 200,
+  max_elements: 10,
 };
 
 /** How many values are rendered for one position before counting only. */

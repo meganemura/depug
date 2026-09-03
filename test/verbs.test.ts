@@ -6,11 +6,18 @@
 // An in-process check would confirm the plugin works and say nothing about
 // whether a verb can load it into someone else's test run.
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseFid, fidWithoutCall } from "../src/fid.ts";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
+import { parseFid, fidWithoutCall, formatFid } from "../src/fid.ts";
 import { applyConfigArgument, findProjectConfig } from "../src/wrapper-config.ts";
+import { eventsToJsonl, flushWorker, readWorkerFiles, toFrameRecord } from "../src/collector.ts";
+import { createRuntime } from "../src/runtime.ts";
 import { seedFromCommand } from "../src/verbs/frames.ts";
+import { formatPreflight } from "../src/verbs/preflight.ts";
 import { run } from "../src/cli.ts";
 
 const FIXTURE_DIR = fileURLToPath(new URL("../fixtures/failing", import.meta.url));
@@ -141,4 +148,200 @@ describe("the command line itself", () => {
     expect(run([]).exitCode).toBe(0);
     expect(run([]).stdout).toContain("depug <verb>");
   });
+});
+
+describe("a function id survives being written and read back", () => {
+  it("round-trips any id the transform can produce", () =>
+    hegel.test((tc) => {
+      // The shapes the transform actually emits: a relative path, a name
+      // that is an identifier or one of the synthetic labels, a position,
+      // and a call index.
+      const path = tc.draw(gs.text({ alphabet: "abc/._-", minSize: 1, maxSize: 20 }));
+      const name = tc.draw(
+        gs.sampledFrom(["parseUser", "#private", "<anonymous>", "<computed>", "constructor", "f"]),
+      );
+      const line = tc.draw(gs.integers({ minValue: 1, maxValue: 100000 }));
+      const column = tc.draw(gs.integers({ minValue: 1, maxValue: 500 }));
+      const call = tc.draw(gs.optional(gs.integers({ minValue: 1, maxValue: 10000 })));
+
+      const original = { path, name, line, column, call: call ?? undefined };
+      const written = formatFid(original);
+      const read = parseFid(written);
+      // Compare against the value that went in, not against the text that
+      // came out: `format(parse(format(x))) === format(x)` holds even for
+      // a format that drops a field, because it drops it both times.
+      expect(read).toEqual(original);
+    }));
+
+  it("never throws on text that is not an id", () =>
+    hegel.test((tc) => {
+      // A person retypes an id by hand. Every verb takes one, so the parse
+      // has to answer rather than raise.
+      const text = tc.draw(gs.text());
+      const parsed = parseFid(text);
+      if (parsed !== undefined) {
+        // Whatever it accepted has to read back as what it was given.
+        expect(formatFid(parsed)).toBe(text);
+      }
+    }));
+});
+
+describe("writing the index a verb reads back", () => {
+  it("emits one parseable line for every event it can name", () =>
+    hegel.test((tc) => {
+      // The file is the interface. A line a reader cannot parse is not a
+      // partial record, it is a broken one.
+      const events = tc.draw(
+        gs.arrays(
+          gs.record({
+            kind: gs.sampledFrom(["enter", "exit", "suspend", "resume"] as const),
+            fn: gs.tuples(
+              gs.text({ alphabet: "abc/", minSize: 1, maxSize: 8 }),
+              gs.sampledFrom(["f", "<anonymous>", "#p"]),
+              gs.integers({ minValue: 1, maxValue: 999 }),
+              gs.integers({ minValue: 1, maxValue: 99 }),
+              gs.integers({ minValue: 1, maxValue: 99 }),
+            ).map(([p, n, l, c, k]) => `${p}.ts:${n}@${l}:${c}#${k}`),
+            line: gs.integers({ minValue: 1, maxValue: 999 }),
+            column: gs.integers({ minValue: 1, maxValue: 99 }),
+            test: gs.optional(gs.text({ maxSize: 20 })),
+          }),
+          { maxSize: 25 },
+        ),
+      );
+
+      const jsonl = eventsToJsonl(events);
+      const lines = jsonl === "" ? [] : jsonl.trimEnd().split("\n");
+      expect(lines).toHaveLength(events.length);
+
+      lines.forEach((line, index) => {
+        const record = JSON.parse(line);
+        expect(record.fid).toBe(events[index].fn);
+        // Only an entry says which call it began inside; the others have
+        // no such claim to make.
+        expect("parent" in record).toBe(events[index].kind === "enter");
+      });
+    }));
+
+  it("drops an event whose id it cannot read, rather than writing half a record", () =>
+    hegel.test((tc) => {
+      const broken = tc.draw(gs.text({ maxSize: 20 }).filter((s) => !s.includes("@")));
+      expect(
+        toFrameRecord({ kind: "enter", fn: broken, line: 1, column: 1, test: null }),
+      ).toBeUndefined();
+    }));
+});
+
+describe("comparing two runs", () => {
+  it("names where two runs first differed, and says the test is not eligible", () => {
+    // A divergence is the answer preflight exists to give. Reporting it as
+    // a bare "not deterministic" would leave a reader with nowhere to look.
+    const report = formatPreflight({
+      deterministic: false,
+      callCount: 2,
+      secondCallCount: 2,
+      fullMatched: false,
+      divergence: { index: 1, first: "src/a.ts:f@1:1#1", second: "src/a.ts:g@2:1#1" },
+      files: [["/tmp/a.jsonl"], ["/tmp/b.jsonl"]],
+      exitStatuses: [1, 1],
+    });
+    expect(report).toContain("first divergence at call 1");
+    expect(report).toContain("src/a.ts:f@1:1#1");
+    expect(report).toContain("src/a.ts:g@2:1#1");
+    expect(report).toContain("not eligible");
+  });
+
+  it("notes a suspend order that differed without calling the test ineligible", () => {
+    // The verbs address calls, so a difference in suspend order is worth
+    // saying and is not a reason to refuse.
+    const report = formatPreflight({
+      deterministic: true,
+      callCount: 3,
+      secondCallCount: 3,
+      fullMatched: false,
+      files: [[], []],
+      exitStatuses: [0, 0],
+    });
+    expect(report).toContain("deterministic (app calls: 3)");
+    expect(report).toContain("suspend and resume order differed");
+    expect(report).not.toContain("not eligible");
+  });
+
+  it("reports a run that ended with no status at all", () => {
+    // A child killed or timed out has no exit status, and reading that as
+    // a pass would be the worst of the three outcomes to get wrong.
+    const report = formatPreflight({
+      deterministic: true, callCount: 0, secondCallCount: 0, fullMatched: true,
+      files: [[], []], exitStatuses: [null, null],
+    });
+    expect(report).toContain("app calls: 0");
+  });
+});
+
+describe("reading worker files back", () => {
+  it("round-trips events through the file a worker writes", () =>
+    hegel.test((tc) => {
+      // The file is how a verb in the parent learns what happened in a
+      // worker. Anything lost between the two is lost for good.
+      const count = tc.draw(gs.integers({ minValue: 0, maxValue: 12 }));
+      const dir = mkdtempSync(join(tmpdir(), "depug-worker-"));
+      try {
+        const runtime = createRuntime();
+        for (let i = 0; i < count; i++) {
+          const prefix = `src/a.ts:f${i % 3}@1:1#`;
+          const call = runtime.enter(prefix, 1, 1);
+          runtime.exit(prefix, 1, 1, "return", call);
+        }
+        flushWorker(dir, runtime);
+
+        const files = readWorkerFiles(dir);
+        const records = files.flatMap((f) => f.records);
+        expect(records).toHaveLength(count * 2);
+        expect(records.filter((r) => r.type === "call")).toHaveLength(count);
+        // The worker names its own file, so several workers do not collide.
+        if (count > 0) expect(files[0].path).toContain(`frames-${process.pid}`);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }));
+
+  it("reads an absent directory as no records, not as a failure", () => {
+    // A run that instrumented nothing writes no directory, and a verb has
+    // to report that rather than fall over reading it.
+    expect(readWorkerFiles(join(tmpdir(), "depug-does-not-exist-000"))).toEqual([]);
+  });
+});
+
+describe("what the command line refuses", () => {
+  it("names an unknown option instead of ignoring it", () => {
+    const result = run(["frames", "--wat", "x", "--", "node"]);
+    expect(result.exitCode).toBe(2);
+    expect(result.stdout).toContain("unknown option: --wat");
+  });
+
+  it("asks for the operand each verb needs", () => {
+    expect(run(["probe", "--", "node"]).stdout).toContain("probe needs a function id");
+    expect(run(["flt", "--", "node"]).stdout).toContain("flt needs a function id");
+    expect(run(["exec", "--", "node"]).stdout).toContain("exec needs a function id");
+  });
+
+  it("refuses an flt target with no call index", () => {
+    // `#k` is what makes the address name one call rather than a function.
+    const result = run(["flt", "src/a.ts:f@1:1", "--", "node"]);
+    expect(result.exitCode).toBe(2);
+    expect(result.stdout).toContain("#k");
+  });
+
+  it("prints the same usage for --help as for no arguments", () => {
+    expect(run(["--help"]).stdout).toBe(run([]).stdout);
+    expect(run(["-h"]).exitCode).toBe(0);
+  });
+
+  it("reports a malformed --at rather than guessing what was meant", () => {
+    const result = run([
+      "frames", "--cwd", FIXTURE_DIR, "--at", "nofile.ts:3",
+      "--", VITEST_BIN, "run", "app.test.ts", "-t", PROPAGATION_TEST,
+    ]);
+    expect(result.stdout).toContain("could not read");
+  }, 120_000);
 });
