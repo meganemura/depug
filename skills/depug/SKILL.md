@@ -34,7 +34,7 @@ process only when you invoke it.
 
 The verbs read whichever runner your command names, so `-- node --test
 path/to/file.test.ts` works the same way a vitest command does. node:test
-has its own reporter, `depug/node-test-reporter`, and prints the same two
+has its own reporter, `@meganemura/depug/node-test-reporter`, and prints the same two
 lines. Its rerun command names the test and any same-named test elsewhere
 in that file, because `--test-name-pattern` matches a test's own name and
 not the suites around it.

@@ -241,7 +241,7 @@ the coordinates, and the files are identical.
 For node:test the reporter is a `--test-reporter`:
 
 ```sh
-node --test --test-reporter=depug/node-test-reporter --test-reporter-destination=stdout \
+node --test --test-reporter=@meganemura/depug/node-test-reporter --test-reporter-destination=stdout \
      --test-reporter=spec --test-reporter-destination=stderr
 ```
 
