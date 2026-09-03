@@ -30,6 +30,7 @@
 // land on one character; see flt.md for the cases this was checked
 // against.
 import ts from "typescript";
+import { SKIP, forEachNode } from "./ast-walk.ts";
 import { functionIdentity } from "./function-identity.ts";
 
 export interface FltTarget {
@@ -158,14 +159,11 @@ export function listInstrumentableFunctions(source: string, fileId: string): Flt
   const sourceFile = ts.createSourceFile(fileId, source, ts.ScriptTarget.Latest, true);
   const targets: FltTarget[] = [];
 
-  function visit(node: ts.Node): void {
-    if (isInstrumentableFunction(node)) {
-      const { name, line, column } = functionIdentity(node, sourceFile, fileId);
-      targets.push({ name, line, column });
-    }
-    ts.forEachChild(node, visit);
-  }
-  visit(sourceFile);
+  forEachNode(sourceFile, (node) => {
+    if (!isInstrumentableFunction(node)) return;
+    const { name, line, column } = functionIdentity(node, sourceFile, fileId);
+    targets.push({ name, line, column });
+  });
   return targets;
 }
 
@@ -185,20 +183,19 @@ export function instrumentTarget(source: string, fileId: string, target: FltTarg
   let targetLine = 0;
   let targetColumn = 0;
 
-  function findTarget(node: ts.Node): void {
-    if (targetNode) return;
+  function findTarget(node: ts.Node): typeof SKIP | void {
+    if (targetNode) return SKIP;
     if (isInstrumentableFunction(node)) {
       const { name, line, column } = functionIdentity(node, sourceFile, fileId);
       if (line === target.line && column === target.column && name === target.name) {
         targetNode = node;
         targetLine = line;
         targetColumn = column;
-        return;
+        return SKIP;
       }
     }
-    ts.forEachChild(node, findTarget);
   }
-  findTarget(sourceFile);
+  forEachNode(sourceFile, findTarget);
 
   if (!targetNode) return { code: source, found: false };
 

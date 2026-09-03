@@ -13,6 +13,7 @@
 // The splice rules are the same as everywhere else: offsets from the AST,
 // no newline in an inserted string, and the line count cannot change.
 import ts from "typescript";
+import { SKIP, forEachNode } from "./ast-walk.ts";
 import { functionIdentity, type NamedFunction } from "./function-identity.ts";
 
 export interface ExecTransformResult {
@@ -59,17 +60,19 @@ function isFunctionLike(node: ts.Node): node is NamedFunction {
  */
 function ownStatements(fn: NamedFunction, sourceFile: ts.SourceFile): { node: ts.Statement; line: number }[] {
   const found: { node: ts.Statement; line: number }[] = [];
-  const visit = (node: ts.Node): void => {
-    if (node !== fn && isFunctionLike(node)) return;
-    if (ts.isStatement(node) && !ts.isBlock(node)) {
-      found.push({
-        node,
-        line: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1,
-      });
-    }
-    ts.forEachChild(node, visit);
-  };
-  ts.forEachChild(fn, visit);
+  ts.forEachChild(fn, (child) => {
+    forEachNode(child, (node) => {
+      // A statement inside a nested function reads a different scope than
+      // the caller named.
+      if (isFunctionLike(node)) return SKIP;
+      if (ts.isStatement(node) && !ts.isBlock(node)) {
+        found.push({
+          node,
+          line: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1,
+        });
+      }
+    });
+  });
   return found;
 }
 
@@ -88,22 +91,19 @@ export function instrumentExec(
   const sourceFile = ts.createSourceFile(fileId, source, ts.ScriptTarget.Latest, true);
   let fn: NamedFunction | undefined;
 
-  const find = (node: ts.Node): void => {
-    if (fn) return;
-    if (isFunctionLike(node)) {
-      const identity = functionIdentity(node, sourceFile, fileId);
-      if (
-        identity.name === target.name &&
-        identity.line === target.line &&
-        identity.column === target.column
-      ) {
-        fn = node;
-        return;
-      }
+  forEachNode(sourceFile, (node) => {
+    if (fn) return SKIP;
+    if (!isFunctionLike(node)) return;
+    const identity = functionIdentity(node, sourceFile, fileId);
+    if (
+      identity.name === target.name &&
+      identity.line === target.line &&
+      identity.column === target.column
+    ) {
+      fn = node;
+      return SKIP;
     }
-    ts.forEachChild(node, find);
-  };
-  find(sourceFile);
+  });
   if (!fn) return { code: source, injected: false, candidateLines: [] };
 
   const statements = ownStatements(fn, sourceFile);

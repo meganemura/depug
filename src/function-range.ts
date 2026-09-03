@@ -12,6 +12,7 @@
 // The innermost function wins, because that is the one whose locals the
 // line actually touched.
 import ts from "typescript";
+import { forEachNode } from "./ast-walk.ts";
 import { functionIdentity, type FunctionIdentity, type NamedFunction } from "./function-identity.ts";
 
 export interface FunctionRange extends FunctionIdentity {
@@ -37,18 +38,15 @@ export function functionRanges(source: string, fileId: string): FunctionRange[] 
   const sourceFile = ts.createSourceFile(fileId, source, ts.ScriptTarget.Latest, true);
   const found: FunctionRange[] = [];
 
-  const visit = (node: ts.Node): void => {
-    if (isFunctionLike(node)) {
-      const identity = functionIdentity(node, sourceFile, fileId);
-      found.push({
-        ...identity,
-        startLine: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1,
-        endLine: sourceFile.getLineAndCharacterOfPosition(node.end).line + 1,
-      });
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  forEachNode(sourceFile, (node) => {
+    if (!isFunctionLike(node)) return;
+    const identity = functionIdentity(node, sourceFile, fileId);
+    found.push({
+      ...identity,
+      startLine: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1,
+      endLine: sourceFile.getLineAndCharacterOfPosition(node.end).line + 1,
+    });
+  });
   return found;
 }
 

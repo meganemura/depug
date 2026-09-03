@@ -17,6 +17,7 @@ import ts from "typescript";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { instrumentSource } from "../src/transform.ts";
+import { functionsContaining } from "../src/function-range.ts";
 import { createRuntime, type DepugRuntime } from "../src/runtime.ts";
 
 const FIXTURE_PATH = join(process.cwd(), "fixtures/basic/src/app.ts");
@@ -320,3 +321,32 @@ function diagnosticCount(sourceFile: ts.SourceFile): number {
   return (sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] })
     .parseDiagnostics?.length ?? 0;
 }
+
+describe("a long expression does not take the run down with it", () => {
+  it("walks a chain far deeper than a recursive descent survives", () =>
+    hegel.test((tc) => {
+      // Found on TypeScript's own codebase, which keeps a regression test
+      // built from a single enormous binary expression. A recursive walk
+      // costs one JavaScript frame per AST level, and a chain is one level
+      // per term: about 3000 terms exhausted the stack, and the rewrite
+      // runs over every file in a project.
+      const terms = tc.draw(gs.integers({ minValue: 1000, maxValue: 6000 }));
+      const chain = Array.from({ length: terms }, (_, i) => i).join(" + ");
+      const source = `export function f(): number {\n  return ${chain};\n}\n`;
+
+      const { code, functions } = instrumentSource(source, "deep.ts");
+      expect(functions).toHaveLength(1);
+      expect(code.split("\n")).toHaveLength(source.split("\n").length);
+      // Fewer cases than the default: each one builds and parses a file of
+      // thousands of terms, and the shape is what matters, not the count.
+    }, { testCases: 12 }));
+
+  it("finds the function holding a line in such a file", () =>
+    hegel.test((tc) => {
+      // `--at` walks the same tree, so it inherits the same limit.
+      const terms = tc.draw(gs.integers({ minValue: 1000, maxValue: 4000 }));
+      const chain = Array.from({ length: terms }, (_, i) => i).join(" + ");
+      const source = `export function f(): number {\n  return ${chain};\n}\n`;
+      expect(functionsContaining(source, "deep.ts", 2).map((h) => h.name)).toEqual(["f"]);
+    }, { testCases: 8 }));
+});

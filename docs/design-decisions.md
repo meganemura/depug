@@ -189,6 +189,45 @@ Both shapes are checked by executing the instrumented code, because a
 diagnostic count cannot distinguish either one from correct output. Neither
 shape occurred in the corpus; both were written by hand.
 
+## Walk the tree iteratively (2026-09-03)
+
+Every rewrite walked the AST by recursion, which costs one JavaScript
+frame per level. A binary expression is one level per term, so a long
+enough chain exhausts the stack and takes the whole run down with it. On
+this machine the limit sat between 2000 and 4000 terms.
+
+Running the rewrites over four codebases found it: TypeScript's own
+repository keeps a regression test built from a single enormous
+expression, and the rewrite crashed on it. The shape is rare in code a
+person writes and ordinary in code a program wrote, and the always-on
+rewrite meets every file in a project, so a crash there takes out a verb
+rather than one file.
+
+The walk now runs over an explicit stack, in one module the five rewrites
+share. Sharing it is the same decision as sharing the naming rule: five
+copies of a traversal are five places for one to stop matching the others,
+and this project has already spent that mistake twice.
+
+Sweeping the four codebases after the change, with all four rewrites over
+every file:
+
+| codebase | files | functions | violations |
+|---|---:|---:|---:|
+| hono | 359 | 8,892 | 0 |
+| excalidraw | 623 | 9,549 | 0 |
+| angular | 5,410 | 66,916 | 0 |
+| TypeScript | 11,984 | 39,323 | 15 |
+
+A violation is a changed line count or a new syntax error. The fifteen are
+all one shape: conformance fixtures such as `async (await) => {}`, which
+TypeScript's parser accepts so that a later pass can report the grammar
+error, and which Node rejects outright. The input could not run before the
+rewrite touched it.
+
+Not measured: whether any codebase holds a chain deep enough to exhaust
+the stack the iterative walk uses for its own queue, which is heap rather
+than stack and so bounded by memory instead.
+
 ## A function id carries its declaration position (2026-09-02)
 
 A function id reads `path:name@line:column#k`, where `k` counts entries of

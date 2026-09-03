@@ -11,6 +11,7 @@
 // string contains a newline, and the line count cannot change.
 import ts from "typescript";
 import { fidWithoutCall } from "./fid.ts";
+import { SKIP, forEachNode } from "./ast-walk.ts";
 import { functionIdentity } from "./function-identity.ts";
 
 export interface UnobservedParameter {
@@ -84,12 +85,13 @@ function splitParameters(node: Targetable): {
  */
 function ownReturns(fn: Targetable): ts.ReturnStatement[] {
   const found: ts.ReturnStatement[] = [];
-  const visit = (node: ts.Node): void => {
-    if (isTargetable(node)) return;
-    if (ts.isReturnStatement(node)) found.push(node);
-    ts.forEachChild(node, visit);
-  };
-  ts.forEachChild(fn, visit);
+  ts.forEachChild(fn, (child) => {
+    forEachNode(child, (node) => {
+      // A return inside a nested function belongs to that function.
+      if (isTargetable(node)) return SKIP;
+      if (ts.isReturnStatement(node)) found.push(node);
+    });
+  });
   return found;
 }
 
@@ -114,7 +116,7 @@ export function instrumentProbes(
   const insertions: Insertion[] = [];
   const hit: ProbeTarget[] = [];
 
-  const visit = (node: ts.Node): void => {
+  forEachNode(sourceFile, (node) => {
     if (isTargetable(node)) {
       // The same rule the call index uses, so an id printed by `frames`
       // addresses the same function here.
@@ -176,9 +178,7 @@ export function instrumentProbes(
         }
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
 
   insertions.sort((a, b) => {
     if (a.offset !== b.offset) return b.offset - a.offset;

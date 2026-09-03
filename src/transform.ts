@@ -7,6 +7,7 @@
 // literals"). Every inserted string is newline-free, so splicing can only
 // lengthen a line, never add or remove one.
 import ts from "typescript";
+import { forEachNode } from "./ast-walk.ts";
 import { functionIdentity, type NamedFunction } from "./function-identity.ts";
 
 export interface InstrumentedFunction {
@@ -182,8 +183,6 @@ export function instrumentSource(source: string, fileId: string): InstrumentResu
       }
 
       callStack.push({ callVar, idLiteral });
-      ts.forEachChild(node, visit);
-      callStack.pop();
       return;
     }
 
@@ -210,9 +209,18 @@ export function instrumentSource(source: string, fileId: string): InstrumentResu
       }
     }
 
-    ts.forEachChild(node, visit);
   }
-  visit(sourceFile);
+
+  // The frame an instrumented function pushed is popped once its own
+  // children have been walked, which is what the recursion used to do on
+  // the way back out.
+  forEachNode(
+    sourceFile,
+    visit,
+    (node) => {
+      if (isInstrumentableFunction(node)) callStack.pop();
+    },
+  );
 
   // Apply from the highest offset down so an earlier insertion never shifts
   // the offset a later insertion targets. Nested functions and `await`s
