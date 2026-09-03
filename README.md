@@ -230,7 +230,18 @@ These are absences the files declare, not facts about the program.
 ## Cost
 
 The always-on layer writes a file when a test fails and does nothing
-otherwise.
+otherwise. Measured on node:test, three suite shapes run nine times each
+-- 700 trivial tests, 200 tests each spawning a shell, and 200 spawning a
+shell that does real work -- the reporter cost nothing above the noise,
+with `--experimental-test-coverage` on. A second reporter alongside it
+cost nothing either.
+
+One project reports otherwise: 700 tests on node:test, 158 s without the
+reporter and 191-197 s with it, about a fifth. That has not been
+reproduced here, and the measurement it came from has no run with two
+reporters and no depug, which is what separates the reporter from the
+second slot. If your suite is large, measure it rather than trusting
+either number.
 
 A verb's instrumentation is a fixed cost of about 67 ms for each worker
 process, dominated by loading `typescript`, plus about 46 ns for each

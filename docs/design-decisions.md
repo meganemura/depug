@@ -547,3 +547,39 @@ Package            Current  Wanted  Latest
 Measured on 2026-09-04 in a fresh project, after a real upgrade in
 another project stopped on the same thing. The README's install section
 names `@latest`.
+
+## What the always-on layer costs, and one measurement that disagrees (2026-09-04)
+
+The always-on layer is a reporter. It reads the event stream, ignores
+every event but a failure and the summary, and writes a file per failure.
+Nothing about that is per-test work, and the claim in the README until
+now was that it costs nothing.
+
+A project running 700 tests on node:test measured 158 s without it and
+191 s, 194 s, and 197 s with it, alternating the configurations to cancel
+drift on a shared machine. About a fifth.
+
+That does not reproduce here. Three shapes on node:test, each
+configuration run three times with `--experimental-test-coverage`:
+
+| shape | one reporter | two reporters | depug + one |
+|---|---|---|---|
+| 700 trivial tests | 0.56 s | -- | 0.54-0.70 s |
+| 200 tests, one shell each | 0.94-0.99 s | 0.95-1.00 s | 0.93-1.02 s |
+| 200 tests, one working shell each | 2.47-2.65 s | 2.45-2.53 s | 2.42-2.59 s |
+
+The reporter's module graph reaches no parser and loads in 18 ms.
+
+The gap between 2.5 s and 158 s is the honest limit of this: a fifth of
+2.5 s is 0.5 s, which these runs would show, but a suite whose tests take
+226 ms each is not a suite this reproduces. What the reporting project's
+measurement lacks is a run with **two reporters and no depug**. It
+compared depug plus `spec` against `spec` alone, and concluded the second
+slot was free by comparing `spec` alone against the default reporter --
+one reporter against one reporter. Here two `spec` reporters cost the
+same as one, so the second slot looks free at this scale too, but at that
+scale it is untested.
+
+Recorded rather than fixed, because a number that cannot be reproduced
+cannot be optimised against. The README now carries both figures and says
+which one has not been reproduced.
