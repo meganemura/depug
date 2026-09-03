@@ -224,12 +224,24 @@ What to check first:
   that wrote the code.
 
 After publishing, install the package from the registry into a fresh
-project and run the verbs there. An `.npmrc` that sets `min-release-age`
-refuses a version published minutes ago and reports it as an install
-failure, which reads exactly like a broken package; pass
-`--min-release-age=0` for that one check. This is the same class of trap
-as `ignore-scripts`: the setting belongs to the machine, and the package
-is fine.
+project and run the verbs there. Two things make a healthy release look
+broken at that moment, and both belong to the machine rather than to the
+package.
+
+A minimum package age refuses a version published minutes ago. npm has
+such a setting, `min-release-age`, and a wrapper in front of npm can
+apply its own with its own flag. Aikido Safe Chain reports `ENOVERSIONS,
+No versions available` and prints the reason after the error rather than
+in it, which reads as an empty package; `--safe-chain-skip-minimum-package-age`
+turns it off for one command, and npm's own check needs
+`--min-release-age=0` beside it. This is the same class of trap as
+`ignore-scripts`.
+
+A new scoped name takes a few minutes to read back. The packument at
+`registry.npmjs.org/@scope%2fname` answered 404 for five minutes after
+the upload returned 200, while the version document, the tarball, and the
+search API already answered 200. Reach for one of those to tell a slow
+release from a failed one, and read the upload's own status first.
 
 ## Where the reasoning lives
 
