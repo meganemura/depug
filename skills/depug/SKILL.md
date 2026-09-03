@@ -91,6 +91,22 @@ A `fid` reads `path:name@line:column#k`. The position is part of the
 identity, because a name does not tell two JavaScript functions apart. `k`
 counts entries of that one function since the test began.
 
+**Arriving with a line rather than an id?** `--at` converts one, innermost
+function first:
+
+```sh
+depug frames --at src/utils/url.ts:208 -- npx vitest run ...
+```
+
+```text
+depug at src/utils/url.ts:208, innermost first:
+  src/utils/url.ts:parse@201:12#1
+  src/utils/url.ts:hc@151:14#1
+```
+
+Reach for this before tracing. Guessing which of several nested functions
+holds a line costs one whole re-run per guess.
+
 Find the call that produced the value you need:
 
 ```sh

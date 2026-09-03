@@ -78,6 +78,21 @@ depug calls: 15
 
 One JSONL record per call, each named by a function id.
 
+You usually arrive knowing a line, not an id. `--at` converts one:
+
+```sh
+depug frames --at src/utils/url.ts:208 -- npx vitest run ...
+```
+
+```text
+depug at src/utils/url.ts:208, innermost first:
+  src/utils/url.ts:parse@201:12#1
+  src/utils/url.ts:hc@151:14#1
+```
+
+The innermost function comes first, because its locals are what that line
+touched. Only calls the run actually recorded are listed.
+
 ### preflight — is this test safe to address by call index?
 
 ```text

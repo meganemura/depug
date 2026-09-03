@@ -12,6 +12,8 @@ import { resolve } from "node:path";
 import { writeJson } from "./evidence.ts";
 import { parseFid } from "./fid.ts";
 import { renderDeclared, renderObserved } from "./shape-report.ts";
+import { readFileSync } from "node:fs";
+import { functionsContaining } from "./function-range.ts";
 import { declaresProjects, findProjectConfig } from "./wrapper-config.ts";
 import { runFrames } from "./verbs/frames.ts";
 import { runFlt } from "./verbs/flt.ts";
@@ -42,6 +44,8 @@ Options:
   --cwd <path>       Run the command here (default: the current directory)
   --index <path>     flt only: refuse if this frames index's code state
                       does not match the working tree this run starts from
+  --at <file>:<n>    frames only: name the calls whose function holds that
+                      line, innermost first
   --line <n>         exec only: the line to evaluate at
   --visit <k>        exec only: which visit to that line (default: 1)
   --statement <expr> exec only: the expression to evaluate
@@ -60,6 +64,7 @@ interface ParsedArgs {
   line?: number;
   visit?: number;
   statement?: string;
+  at?: string;
   index?: string;
 }
 
@@ -80,6 +85,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs | { error: string
     else if (arg === "--line") parsed.line = Number(before[++i]);
     else if (arg === "--visit") parsed.visit = Number(before[++i]);
     else if (arg === "--statement") parsed.statement = before[++i];
+    else if (arg === "--at") parsed.at = before[++i];
     else if (arg === "--index") parsed.index = before[++i];
     else if (arg.startsWith("--")) return { error: `unknown option: ${arg}` };
     else parsed.operands.push(arg);
@@ -128,6 +134,7 @@ export function run(argv: readonly string[]): CliResult {
         );
       }
     }
+    if (parsed.at) lines.push(...describeAt(parsed.at, cwd, result.records));
     lines.push(`depug result: ${describeExit(result.envelope.exit_status)}`);
     return { exitCode: 0, stdout: `${lines.join("\n")}\n` };
   }
@@ -257,6 +264,53 @@ function formatSamples(samples: readonly string[], omitted: number): string {
   if (samples.length === 0) return "(none)";
   const shown = samples.join(", ");
   return omitted > 0 ? `${shown}, … (${omitted} more)` : shown;
+}
+
+/**
+ * Names the calls whose function holds one line, innermost first.
+ *
+ * A reader starts from a line and a verb wants a function id, and doing
+ * that conversion by eye costs a whole re-run when it goes wrong. Only
+ * calls the index actually recorded are listed: a function that holds the
+ * line but never ran is not something to trace.
+ */
+function describeAt(at: string, cwd: string, records: readonly { type: string; fid: string }[]): string[] {
+  const separator = at.lastIndexOf(":");
+  const path = at.slice(0, separator);
+  const line = Number(at.slice(separator + 1));
+  if (separator === -1 || !Number.isFinite(line)) {
+    return [`depug note: --at wants <file>:<line>, and got ${at}`];
+  }
+
+  let source: string;
+  try {
+    source = readFileSync(resolve(cwd, path), "utf8");
+  } catch {
+    return [`depug note: --at names a file depug could not read: ${path}`];
+  }
+
+  const holders = functionsContaining(source, path, line);
+  if (holders.length === 0) return [`depug note: no function in ${path} holds line ${line}`];
+
+  const ran = new Map<string, string[]>();
+  for (const record of records) {
+    if (record.type !== "call") continue;
+    const withoutCall = record.fid.slice(0, record.fid.lastIndexOf("#"));
+    const list = ran.get(withoutCall) ?? [];
+    list.push(record.fid);
+    ran.set(withoutCall, list);
+  }
+
+  const lines = [`depug at ${path}:${line}, innermost first:`];
+  for (const holder of holders) {
+    const calls = ran.get(holder.id);
+    lines.push(
+      calls
+        ? `  ${calls.join(", ")}`
+        : `  ${holder.id}  (holds the line, but no call was recorded)`,
+    );
+  }
+  return lines;
 }
 
 function describeExit(status: number | null): string {
