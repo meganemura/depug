@@ -586,14 +586,41 @@ depug-free side measured 129-136 s where the first sitting measured
 Absolute times across sittings are not comparable; only the difference
 within one sitting is.
 
-So the position is: the cost is real, it is in the reporter, and it does
-not reproduce here at any shape tried. The largest shape here runs 2.5 s
-against their 158 s, and two numbers 60 times apart do not speak for each
-other. The reporter's loop skips every event but a failure and the
-summary, so there is no per-test work to point at, and the next
-measurement worth making is whether a reporter module that does nothing
-at all costs the same on that suite -- which would put the cost in how
-Node feeds a module reporter rather than in anything depug does.
+Two more of their measurements narrowed it further. A reporter module
+that consumes every event and does nothing ran 138 s and 151 s against
+depug's 163 s and 184 s, so the cost is in depug rather than in how Node
+feeds a module reporter. Their event count is 3,545 with no `test:stdout`
+at all, and 25-33 s over 3,545 events is 7-9 ms each, which a loop that
+skips every event cannot spend: per-event is not the explanation. And the
+cost appears only under parallelism -- their eight files run separately
+sum to a 4 s difference, and run together as Node runs them differ by
+25-33 s.
 
-Recorded rather than fixed. The README carries both figures and calls the
-cost unexplained rather than zero.
+That last one is a reproducible shape, so it was built here: eight files,
+one spawning 200 Node child processes, seven with ordinary tests, all run
+as Node runs them. Fourteen interleaved pairs against the noop reporter,
+across two sittings:
+
+| | median | range |
+|---|---|---|
+| noop | 12.43 s | 12.14-12.88 |
+| depug | 12.47 s | 12.03-13.65 |
+
+The median difference within a pair is -0.04 s, and depug was the slower
+side of 2 pairs out of 6 in the quiet sitting. An earlier sitting of 3
+pairs showed depug +1.5 s and it did not survive going to 8 pairs, which
+is the size of the noise here and a caution against reading small n.
+
+So the cost is real on that suite, it is in the reporter, it is not
+per-event, it needs parallelism -- and it does not reproduce here at 12 s
+in the shape that produces it at 158 s. The reporter's loop is
+functionally the noop reporter on a green run: it skips every event but a
+failure and the summary, its module graph reaches no parser and loads in
+18 ms, and none of the modules it pulls in does work at load. There is no
+mechanism here to point at, which is why this is recorded rather than
+fixed. The remaining split is a reporter that loads depug's module graph
+and runs the noop loop, which separates holding those modules from
+running the loop; it is with the reporting project.
+
+The README carries both figures and calls the cost unexplained rather
+than zero.
