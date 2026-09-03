@@ -21,8 +21,17 @@ reach the checker depug carries.
 The cost is one more copy of the parser, 24 MB, on a host that is not
 already on 6.0.3. A host on 6.0.3 shares one copy.
 
-Nothing else changed. TypeScript 7 is still not a parser depug can use,
-for the reason in the 0.1.0 notes.
+### Evidence files now name the version that wrote them
+
+Every file an installed 0.1.0 wrote claimed `tool.version` was `0.0.0`.
+The version was read from the manifest at a path counted from the source
+layout, and the build puts each module one level deeper, so an installed
+copy found nothing and fell back. A checkout reported the real version,
+which is why no test saw it. The probe verb and the node:test reporter
+held `0.0.0` as a literal and were wrong in both layouts.
+
+TypeScript 7 is still not a parser depug can use, for the reason in the
+0.1.0 notes.
 
 ## 0.1.0 - 2026-09-03
 
