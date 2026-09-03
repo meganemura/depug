@@ -236,20 +236,25 @@ shell that does real work -- the reporter cost nothing above the noise,
 with `--experimental-test-coverage` on. A second reporter alongside it
 cost nothing either.
 
-One project measures otherwise, on a suite where each of 700 tests takes
-about 226 ms: it spawns a shell per gate check, contends real processes
-against a lock, and builds and discards a git repository. Alternating the
-configurations, two `spec` reporters and no depug ran 129 s and 136 s,
-and depug beside one `spec` ran 162 s twice: **+26 s and +33 s, around a
-fifth, and in depug's layer rather than in the second reporter slot.**
+One project sees something else on a suite where each of 700 tests takes
+about 226 ms, spawning a shell per gate check and contending real
+processes against a lock. Alternating the configurations, three separate
+sittings put depug 25-35 s above a reporter that does nothing. A fourth
+sitting, same machine and same suite, put the two within 5 s of each
+other in all four pairs, and its absolute times were 20 % below the
+earlier sittings' baseline for reasons neither of us can name.
 
-That does not reproduce here at any shape tried, and the largest of those
-runs 2.5 s where theirs runs 158 s. Two numbers 60 times apart do not
-speak for each other, so the cost of the always-on layer on a large,
-process-heavy suite is **unexplained rather than measured at zero**. If
-your suite is one of those, measure it: run the configurations
-alternately, because absolute times on a shared machine drifted by 20 %
-between sittings and only the difference within a sitting held.
+So: **on a large, process-heavy suite the always-on layer sometimes costs
+about a fifth, and sometimes costs nothing, and what distinguishes the
+two has not been found.** It does not reproduce here at all, including in
+the shape that produces it there -- eight files run in parallel, one
+spawning 200 child processes -- where fourteen interleaved pairs put
+depug 0.04 s below the do-nothing reporter.
+
+If your suite is large and process-heavy, measure it rather than trusting
+any of these numbers. Run the configurations alternately and in both
+orders, and take several pairs: a three-pair sitting here showed a 1.5 s
+penalty that vanished at eight pairs.
 
 A verb's instrumentation is a fixed cost of about 67 ms for each worker
 process, dominated by loading `typescript`, plus about 46 ns for each

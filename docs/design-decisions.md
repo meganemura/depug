@@ -611,16 +611,44 @@ side of 2 pairs out of 6 in the quiet sitting. An earlier sitting of 3
 pairs showed depug +1.5 s and it did not survive going to 8 pairs, which
 is the size of the noise here and a caution against reading small n.
 
-So the cost is real on that suite, it is in the reporter, it is not
-per-event, it needs parallelism -- and it does not reproduce here at 12 s
-in the shape that produces it at 158 s. The reporter's loop is
+A fourth sitting then removed the finding's footing. Four pairs, all
+seven hundred tests passing in every run, the reporter placed where its
+bare specifier resolves and confirmed to run: noop 136/130/131/130 s
+against depug 131/134/130/130 s, differences of -5, +4, -1, and 0. The
+same machine and the same suite that had shown 25-35 s three times
+running showed nothing. Its absolute times also sat 20 % below the
+earlier sittings' control side, under a load average of 6, which the
+earlier sittings also had.
+
+So the honest state is weaker than "real but unexplained": **the cost
+appears in some sittings and not in others, on one machine and one
+suite, and what distinguishes a sitting has not been found.** It is
+also, in the split that would have separated loading depug's modules
+from running its loop, unmeasurable -- with no difference between the
+arms there is no side for the third arm to fall on.
+
+One candidate for the sitting-level confound, from both sets of
+measurements: **within a pair, the second position absorbs whatever the
+machine does during it.** Alternating A then B repeatedly still runs A
+first in every pair, so a machine drifting slower through a sitting
+penalises B and a machine drifting faster rewards it. The sittings that
+showed the cost ran at 158-197 s; the one that did not ran at 130-136 s.
+Here, the eight-pair sitting where depug came out 0.55 s faster had its
+first arm falling from 20.3 s to 17.1 s across the sitting, and depug ran
+second in every pair. Running the same do-nothing reporter in both
+positions measured position alone at +0.09 s, but that was a sitting with
+no drift to absorb, so it tests nothing. The design that removes the
+confound is to run each pair in both orders.
+
+So the cost is not per-event, it needs parallelism, and it does not
+reproduce here at 12 s in the shape that produces it at 158 s. The reporter's loop is
 functionally the noop reporter on a green run: it skips every event but a
 failure and the summary, its module graph reaches no parser and loads in
 18 ms, and none of the modules it pulls in does work at load. There is no
 mechanism here to point at, which is why this is recorded rather than
-fixed. The remaining split is a reporter that loads depug's module graph
-and runs the noop loop, which separates holding those modules from
-running the loop; it is with the reporting project.
+fixed. The remaining split -- a reporter that loads depug's module
+graph and runs the noop loop -- was run and could not be read, because
+that sitting had no difference to divide.
 
 The README carries both figures and calls the cost unexplained rather
 than zero.
