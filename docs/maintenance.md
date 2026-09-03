@@ -191,6 +191,13 @@ at all is in `docs/design-decisions.md`.
 What to check first:
 
 - `npm test` passes with `DEPUG_CORPUS_DIR` set, not only without it.
+- **`package-lock.json` agrees with `package.json`.** None of the commands
+  a release runs -- `build`, `typecheck`, `test`, `pack` -- rewrite the
+  lock, so it drifts and every one of them still passes. Before the first
+  release it still held the name, the version `0.0.0`, and an executable
+  at `bin/depug.ts` from before any of that changed. `npm install
+  --package-lock-only` rewrites the fields npm copies from the manifest
+  and touches no dependency.
 - Nothing in the tracked tree names a path on one machine, a secret, or a
   working note. `git grep` over the tracked files and over the commit
   messages, and confirm that everything the ignore file excludes is still
@@ -215,6 +222,14 @@ What to check first:
   install, and run the suite. That is the state a first contributor is in,
   and it has been broken twice by things already present on the machine
   that wrote the code.
+
+After publishing, install the package from the registry into a fresh
+project and run the verbs there. An `.npmrc` that sets `min-release-age`
+refuses a version published minutes ago and reports it as an install
+failure, which reads exactly like a broken package; pass
+`--min-release-age=0` for that one check. This is the same class of trap
+as `ignore-scripts`: the setting belongs to the machine, and the package
+is fine.
 
 ## Where the reasoning lives
 
