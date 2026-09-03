@@ -243,6 +243,14 @@ enough: with `min-release-age-exclude[]` naming this package, the install
 still failed, because that list belongs to npm and the wrapper keeps its
 own. This is the same class of trap as `ignore-scripts`.
 
+Only the one `npm install` that first resolves the version meets either
+gate. Both apply when npm chooses a version and neither when a lockfile
+has already chosen it: with `min-release-age=7` in `.npmrc`, no
+exclusion, and the wrapper in place, `npm ci` from a lockfile pinning a
+version published the day before installed it with no flag. A project's
+CI runs `npm ci`, so it is not affected, and its `.npmrc` needs no
+change. Measured twice on 2026-09-04, in two projects.
+
 A new scoped name takes a few minutes to read back. The packument at
 `registry.npmjs.org/@scope%2fname` answered 404 for five minutes after
 the upload returned 200, while the version document, the tarball, and the
