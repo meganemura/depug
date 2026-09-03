@@ -13,10 +13,8 @@ v26.7.0, vitest 4.1.11, and typescript 6.0.3.
 
 ## Install
 
-depug is not published. Point a dependency at a checkout:
-
 ```sh
-npm install --save-dev /path/to/depug
+npm install --save-dev depug
 ```
 
 Add the reporter to your vitest config. Nothing else has to change:

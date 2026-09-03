@@ -1,10 +1,10 @@
 // Generates the config that loads the injection rewrite. The rules it
 // follows live in wrapper-config.ts, shared with every other verb.
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { siblingPath } from "./sibling.ts";
 import { writeGeneratedConfig, type Wrapper } from "./wrapper-config.ts";
 
-const PLUGIN_MODULE = fileURLToPath(new URL("./exec-plugin.ts", import.meta.url));
+const PLUGIN_MODULE = siblingPath("exec-plugin", import.meta.url);
 
 export interface ExecWrapperInput {
   cwd: string;

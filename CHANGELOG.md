@@ -1,10 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 - 2026-09-03
 
-Nothing has been published. The version in `package.json` is `0.0.0` and
-the package is marked private, so what follows describes the work that
-will become `0.1.0`.
+The first release.
 
 ### A failed test now names the evidence and the command that reaches it
 
@@ -96,6 +94,16 @@ samples are capped.
 Two rewrites are also run over a real codebase at a pinned commit, because
 fixtures only cover the shapes their author thought of. That check is what
 found the one rewrite bug that reached a real project.
+
+### Distribution
+
+The package ships compiled JavaScript built from the TypeScript sources.
+Development runs the sources directly and needs no build; publishing does.
+Node refuses to strip types from any file under `node_modules`, so a
+package of `.ts` files is unusable on every path at once -- its command
+line, a plain import, and a vitest config each fail on it. Installing the
+packed tarball into a fresh project is what showed that, and is now part
+of the release check.
 
 ### Scope
 

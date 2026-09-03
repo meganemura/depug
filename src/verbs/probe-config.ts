@@ -2,10 +2,10 @@
 // test run. The rules it follows -- where the file goes, and why -- live
 // in wrapper-config.ts, which every verb's generated config shares.
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { modulePath } from "../sibling.ts";
 import { writeGeneratedConfig, type Wrapper } from "../wrapper-config.ts";
 
-const PLUGIN_MODULE = fileURLToPath(new URL("../probe-plugin.ts", import.meta.url));
+const PLUGIN_MODULE = modulePath("../probe-plugin", import.meta.url);
 
 export interface ProbeWrapperInput {
   cwd: string;

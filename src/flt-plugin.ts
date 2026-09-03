@@ -13,10 +13,10 @@
 // and vite alone does not know about.
 import type { Plugin } from "vitest/config";
 import { relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { siblingPath } from "./sibling.ts";
 import { instrumentTarget } from "./flt-transform.ts";
 
-const SETUP_FILE = fileURLToPath(new URL("./flt-setup.ts", import.meta.url));
+const SETUP_FILE = siblingPath("flt-setup", import.meta.url);
 
 export interface DepugFltPluginOptions {
   /** Paths in the target's fid are written relative to this directory. */

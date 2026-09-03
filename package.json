@@ -1,32 +1,69 @@
 {
   "name": "depug",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "Measure runtime values in TypeScript test runs instead of guessing them from source.",
+  "keywords": [
+    "typescript",
+    "testing",
+    "vitest",
+    "debugging",
+    "instrumentation",
+    "test-runner",
+    "ai-agents",
+    "coding-agents"
+  ],
   "license": "MIT",
+  "homepage": "https://github.com/meganemura/depug#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/meganemura/depug.git"
+  },
+  "bugs": {
+    "url": "https://github.com/meganemura/depug/issues"
+  },
   "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "exports": {
-    ".": "./src/index.ts",
-    "./reporter": "./src/reporter.ts",
-    "./plugin": "./src/plugin.ts",
-    "./package.json": "./package.json",
-    "./node-test-reporter": "./src/node-test-reporter.ts"
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    },
+    "./reporter": {
+      "types": "./dist/src/reporter.d.ts",
+      "default": "./dist/src/reporter.js"
+    },
+    "./node-test-reporter": {
+      "types": "./dist/src/node-test-reporter.d.ts",
+      "default": "./dist/src/node-test-reporter.js"
+    },
+    "./plugin": {
+      "types": "./dist/src/plugin.d.ts",
+      "default": "./dist/src/plugin.js"
+    },
+    "./package.json": "./package.json"
   },
   "bin": {
-    "depug": "./bin/depug.ts"
+    "depug": "./dist/bin/depug.js"
   },
   "files": [
-    "bin",
+    "dist",
     "src",
+    "bin",
     "skills",
     "docs",
     "AGENTS.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "tsc --noEmit && vitest run",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "prepack": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
     "typescript": ">=5.5.4 <7.0.0"

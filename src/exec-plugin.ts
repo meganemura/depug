@@ -9,10 +9,10 @@
 // and vite alone does not know about.
 import type { Plugin } from "vitest/config";
 import { relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { siblingPath } from "./sibling.ts";
 import { instrumentExec } from "./exec-transform.ts";
 
-const SETUP_FILE = fileURLToPath(new URL("./exec-setup.ts", import.meta.url));
+const SETUP_FILE = siblingPath("exec-setup", import.meta.url);
 
 export interface ExecPluginOptions {
   root: string;

@@ -9,6 +9,8 @@
 // the rerun line the failure already printed and retyping a flag onto it
 // is friction with no information in it. `--runner` overrides where a
 // command is ambiguous.
+import { siblingPath } from "./sibling.ts";
+
 export type Runner = "vitest" | "node";
 
 /**
@@ -29,7 +31,7 @@ export function detectRunner(command: readonly string[]): Runner {
 
 /** Absolute path of the module `NODE_OPTIONS` preloads for node:test. */
 export function nodeTestHookPath(): string {
-  return new URL("./node-test-hook.ts", import.meta.url).pathname;
+  return siblingPath("node-test-hook", import.meta.url);
 }
 
 /**

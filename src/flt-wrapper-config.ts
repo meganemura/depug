@@ -3,10 +3,10 @@
 // it goes there, and how a project with no config of its own is handled --
 // live in wrapper-config.ts, which every verb's generated config shares.
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { siblingPath } from "./sibling.ts";
 import { writeGeneratedConfig, type Wrapper } from "./wrapper-config.ts";
 
-const PLUGIN_MODULE = fileURLToPath(new URL("./flt-plugin.ts", import.meta.url));
+const PLUGIN_MODULE = siblingPath("flt-plugin", import.meta.url);
 
 export interface FltWrapperTarget {
   path: string;

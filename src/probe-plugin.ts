@@ -11,10 +11,10 @@
 import type { Plugin } from "vitest/config";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { siblingPath } from "./sibling.ts";
 import { instrumentProbes, type ProbeTarget } from "./probe-transform.ts";
 
-const SETUP_FILE = fileURLToPath(new URL("./probe-setup.ts", import.meta.url));
+const SETUP_FILE = siblingPath("probe-setup", import.meta.url);
 
 export interface ProbePluginOptions {
   /** Function ids to observe, each `path:name@line:column`. */

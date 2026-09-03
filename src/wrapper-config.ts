@@ -18,8 +18,9 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { siblingPath } from "./sibling.ts";
 
-const PLUGIN_MODULE = fileURLToPath(new URL("./plugin.ts", import.meta.url));
+const PLUGIN_MODULE = siblingPath("plugin", import.meta.url);
 
 // depug's own package directory. vite refuses to serve a file outside the
 // project root unless it is on this list, and depug's setup file always is

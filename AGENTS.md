@@ -18,11 +18,11 @@ A test is a rerun device with the same inputs, so depug keeps no continuous reco
 
 ## Visibility
 
-This repository is private today and is meant to be published.
-Write every file as if it were already public: README, docs, comments, commit messages, and the skill, all in English.
+This repository is public, and the package is published to npm.
+Write every file that way: README, docs, comments, commit messages, and the skill, all in English.
 Do not write any reference to internal working documents into committed files.
 When you want to reference one, write its substance in place.
-Publishing is the owner's decision at that moment; see `docs/maintenance.md` for what to check before it.
+Each further release is the owner's decision at that moment; see `docs/maintenance.md` for what to check before one.
 
 ## Settled design
 
@@ -39,6 +39,7 @@ next section records those and what each one measured.
 - **vitest first, then node:test.** Both are supported in v0.1: vitest through a vite plugin, node:test through `module.registerHooks()` reached by `NODE_OPTIONS`. The transforms are shared. **jest stays out of v0.1** (the owner decided this on 2026-09-03): it would be the third development dependency, and the three real projects measured against depug all use vitest, so nothing measured asks for it yet. Its route in is unchanged when it is wanted, through jest's own transform setting.
 - **The parser is `typescript`, versions 5.5.4 through 6.x.** It is the language vendor's parser. Speed matters less because the transform targets one file or one function per rerun. TypeScript 7 is a separate decision, recorded below.
 - **Distribution is one npm package plus one bundled skill.** Files (JSON, JSONL) are the primary API. The schema is the public contract.
+- **The package ships compiled JavaScript, built from the TypeScript sources.** Development runs the sources directly, with no build in the loop; publishing cannot. Node refuses to strip types from any file under `node_modules`, so a package of `.ts` is unusable on every path: its command line, a plain import, and a vitest config all fail with `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`. Measured by installing the packed tarball into a fresh project on 2026-09-03.
 
 ## Decisions from the stage A measurements
 

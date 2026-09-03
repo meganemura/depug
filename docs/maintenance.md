@@ -151,13 +151,31 @@ Another needs the owner's approval, an exact pin, and a version at least
 seven days old with no later security fix. `typescript` must not gain a
 second parser beside it.
 
-## Before publishing
+## The build
 
-Nothing is published. `package.json` carries `"private": true` and version
-`0.0.0`, and this repository holds no release workflow, so a release is
-whatever the owner does by hand. Publishing, changing the repository's
-visibility, and pushing a tag are each the owner's decision at that
-moment.
+`npm run build` compiles the sources into `dist/` with declarations and
+source maps, and the package's entry points name `dist/`. Development
+never runs it: the suite loads the sources directly, and the build exists
+only for what gets published.
+
+It exists because Node refuses to strip types from any file under
+`node_modules`. A package of `.ts` files is not partly broken there, it is
+wholly broken: the command line, a plain import, and a vitest config all
+fail with `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`.
+
+One thing to keep in mind when adding a module that names another of
+depug's own files -- a plugin naming its setup file, a generated config
+naming a plugin, a verb naming the hook it preloads. Write that path
+through `src/sibling.ts`, never as a literal `./x.ts`. The source tree and
+the build have the same shape and different extensions, and a literal is
+correct in one and broken in the other. Two such paths were missed on the
+first pass and only surfaced from an installed package.
+
+## Releasing
+
+This repository holds no release workflow, so a release is what the owner
+does by hand. Publishing to npm, changing the repository's visibility, and
+pushing a tag are each their decision at that moment.
 
 What to check first:
 
@@ -174,6 +192,11 @@ What to check first:
   `docs/design-decisions.md` still describe the code. Each one names the
   machine and the sample it came from, and a number that has quietly
   stopped being true is worse than no number.
+- **The packed tarball works from a fresh project.** `npm pack`, install
+  the result somewhere else, and run each verb and both runners against
+  it. Everything above passes on the source tree whether or not the
+  package is usable, and the first attempt at this release produced a
+  tarball that failed on every path.
 
 ## Where the reasoning lives
 
