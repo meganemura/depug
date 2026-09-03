@@ -1,6 +1,6 @@
 {
   "name": "@meganemura/depug",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Measure runtime values in TypeScript test runs instead of guessing them from source.",
   "keywords": [
     "typescript",
@@ -67,14 +67,13 @@
     "coverage": "vitest run --coverage",
     "prepublishOnly": "npm run build"
   },
-  "peerDependencies": {
-    "typescript": ">=5.5.4 <7.0.0"
+  "dependencies": {
+    "typescript": "6.0.3"
   },
   "devDependencies": {
     "@hegeldev/hegel": "0.4.5",
     "@types/node": "26.4.0",
     "@vitest/coverage-v8": "4.1.11",
-    "typescript": "6.0.3",
     "vitest": "4.1.11"
   }
 }
