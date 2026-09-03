@@ -28,15 +28,7 @@ import {
   type SnapEvidence,
 } from "./evidence.ts";
 import { hasProducerFrame, toEvidenceFrames, type RunnerStackEntry } from "./stack.ts";
-
-function toolVersion(): string {
-  try {
-    const pkg = fileURLToPath(new URL("../package.json", import.meta.url));
-    return JSON.parse(readFileSync(pkg, "utf8")).version ?? "0.0.0";
-  } catch {
-    return "0.0.0";
-  }
-}
+import { toolVersion } from "./tool-version.ts";
 
 /**
  * Names what the evidence file can answer, so a reader knows whether to

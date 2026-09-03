@@ -27,6 +27,7 @@ import type { ProbeTarget } from "../probe-transform.ts";
 import { applyConfigArgument } from "../wrapper-config.ts";
 import { detectRunner, withNodeTestHook, type Runner } from "../runner.ts";
 import { writeProbeWrapperConfig } from "./probe-config.ts";
+import { toolVersion } from "../tool-version.ts";
 
 export interface ProbeColumn {
   observed: ObservedShape;
@@ -190,7 +191,7 @@ export function runProbe(input: RunProbeInput): ProbeResult {
     output: {
       schema_version: SCHEMA_VERSION,
       kind: "probe",
-      tool: { name: "depug", version: "0.0.0" },
+      tool: { name: "depug", version: toolVersion() },
       code_state: readCodeState(input.cwd),
       targets,
       functions,

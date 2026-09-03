@@ -33,6 +33,7 @@ import {
 } from "./evidence.ts";
 import { parseStack } from "./stack-parse.ts";
 import { hasProducerFrame, toEvidenceFrames } from "./stack.ts";
+import { toolVersion } from "./tool-version.ts";
 
 interface TestFailEvent {
   type: string;
@@ -111,7 +112,7 @@ export default async function* depugNodeReporter(
     const evidence: SnapEvidence = {
       schema_version: SCHEMA_VERSION,
       kind: "snap",
-      tool: { name: "depug", version: "0.0.0" },
+      tool: { name: "depug", version: toolVersion() },
       captured_at: `${new Date().toISOString().slice(0, 19)}Z`,
       capture_mode: "failure_text",
       code_state: readCodeState(root),
