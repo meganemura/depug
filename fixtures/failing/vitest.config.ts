@@ -1,9 +1,11 @@
 import { defineConfig } from "vitest/config";
-import DepugReporter from "depug/reporter";
+import DepugReporter from "../../src/reporter.ts";
 
-// Imported by package name, not by a relative path, so this fixture takes
-// the same route a project installing depug would. A relative import would
-// keep working even if the package exported nothing.
+// Imported by path, not by package name. Naming the package would make
+// this fixture depend on the build being present, and a fresh clone has
+// none: the suite must run on a checkout that has only been installed.
+// The published entry points are checked where they can be checked
+// properly, by installing a packed tarball into another project.
 export default defineConfig({
   test: {
     include: ["app.test.ts"],

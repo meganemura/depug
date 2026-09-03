@@ -8,16 +8,14 @@ What someone working on depug needs that is not in the README.
 npm test
 ```
 
-Builds, type-checks, then runs 205 tests. Two of them skip unless a
-corpus is available. `npm run build`, `npm run typecheck` and `npm run
-coverage` run each part on its own.
+Type-checks, then runs 205 tests. Two of them skip unless a corpus is
+available. `npm run typecheck` and `npm run coverage` run either part on
+its own, and `npm run build` compiles what gets published.
 
-The build is a prerequisite rather than a separate chore: one fixture
-loads depug through the package's own entry points, which name `dist/`, so
-a fresh clone cannot test until it has built. That fixture exists to fail
-when a published entry point stops resolving, and it earned its keep by
-failing on a clone of this repository before the build was wired in. The
-build takes about two seconds.
+The suite deliberately does not need the build. It loads depug by path,
+never by package name, so a checkout that has only been installed can run
+it. Depending on the build would have meant depending on a lifecycle
+script, and `ignore-scripts` is a setting a machine can carry.
 
 The type check runs before the tests rather than beside them because a
 type error is usually the cheaper failure to read, and because the suite
@@ -199,11 +197,18 @@ What to check first:
   `docs/design-decisions.md` still describe the code. Each one names the
   machine and the sample it came from, and a number that has quietly
   stopped being true is worse than no number.
-- **The packed tarball works from a fresh project.** `npm pack`, install
-  the result somewhere else, and run each verb and both runners against
-  it. Everything above passes on the source tree whether or not the
-  package is usable, and the first attempt at this release produced a
-  tarball that failed on every path.
+- **The packed tarball works from a fresh project.** Run `npm run build`
+  first, by hand: `prepublishOnly` and `prepack` do not run under
+  `ignore-scripts`, which a machine can be configured with, and a tarball
+  built from a stale `dist` looks exactly like a good one. Then `npm
+  pack`, install the result somewhere else, and run each verb and both
+  runners against it. Everything else in this list passes whether or not
+  the package is usable at all, and the first attempt at this release
+  produced a tarball that failed on every path.
+- **A fresh clone passes.** Clone the published repository somewhere else,
+  install, and run the suite. That is the state a first contributor is in,
+  and it has been broken twice by things already present on the machine
+  that wrote the code.
 
 ## Where the reasoning lives
 
