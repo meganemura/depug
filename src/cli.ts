@@ -21,6 +21,7 @@ import { runFlt } from "./verbs/flt.ts";
 import { formatPreflight, runPreflight } from "./verbs/preflight.ts";
 import { runProbe } from "./verbs/probe.ts";
 import { formatExec, runExec } from "./verbs/exec.ts";
+import { TIMED_OUT, runRerun, withoutGuard } from "./verbs/rerun.ts";
 
 export interface CliResult {
   exitCode: number;
@@ -39,6 +40,8 @@ Verbs:
   exec <fid> --line N --statement <expr> -- <command...>
                             Evaluate an expression inside one call, at one
                             line, in that line's own scope
+  rerun      -- <command>   Run the command under a clock, so a test that
+                            never returns cannot outlive you
 
 Options:
   --include <path>   Instrument files under this path. Repeat it for more
@@ -52,6 +55,8 @@ Options:
   --line <n>         exec only: the line to evaluate at
   --visit <k>        exec only: which visit to that line (default: 1)
   --statement <expr> exec only: the expression to evaluate
+  --timeout <s>      rerun only: seconds before the run is stopped
+                      (default 120). The re-execution verbs carry their own.
 
 The command is the rerun line a failure printed, for example:
   depug frames -- npx vitest run "test/user.test.ts" -t "parses a user"
@@ -69,6 +74,7 @@ interface ParsedArgs {
   statement?: string;
   at?: string;
   index?: string;
+  timeout?: number;
 }
 
 export function parseArgs(argv: readonly string[]): ParsedArgs | { error: string } {
@@ -90,6 +96,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs | { error: string
     else if (arg === "--statement") parsed.statement = before[++i];
     else if (arg === "--at") parsed.at = before[++i];
     else if (arg === "--index") parsed.index = before[++i];
+    else if (arg === "--timeout") parsed.timeout = Number(before[++i]);
     else if (arg.startsWith("--")) return { error: `unknown option: ${arg}` };
     else parsed.operands.push(arg);
   }
@@ -128,7 +135,14 @@ export function run(argv: readonly string[]): CliResult {
   // sits, and instrumenting a dependency would put calls in the index
   // that no verb can address anyway.
   const include = resolveIncludes(cwd, parsed.include);
-  const input = { command: [...parsed.command], cwd, includePathPrefixes: include.prefixes };
+  // A verb carries its own clock, so a rerun line pasted after one would
+  // otherwise run two supervisors deep. Stripping the guard here lets the
+  // printed line serve both uses without a reader editing it.
+  const input = {
+    command: withoutGuard(parsed.command),
+    cwd,
+    includePathPrefixes: include.prefixes,
+  };
 
   if (parsed.verb === "frames") {
     const result = runFrames(input);
@@ -292,7 +306,46 @@ export function run(argv: readonly string[]): CliResult {
     return { exitCode: result.error ? 2 : 0, stdout: `${formatExec(result)}\n` };
   }
 
+  if (parsed.verb === "rerun") {
+    // Reached only through `runCli`, which can await it. `run` stays
+    // synchronous because every other verb is, and its callers -- the
+    // tests among them -- read a result rather than a promise.
+    return { exitCode: 2, stdout: "depug: rerun has to be run through the command line\n" };
+  }
+
   return { exitCode: 2, stdout: `depug: unknown verb: ${parsed.verb}\n\n${USAGE}` };
+}
+
+/**
+ * The command line's entry point, for the one verb that has to wait.
+ *
+ * `rerun` supervises a process, so it cannot answer synchronously. Every
+ * other verb can, and routing them through `run` keeps them callable
+ * without a promise in the way.
+ */
+export async function runCli(argv: readonly string[]): Promise<CliResult> {
+  if (wantsHelp(argv)) return run(argv);
+  const parsed = parseArgs(argv);
+  if ("error" in parsed || parsed.verb !== "rerun") return run(argv);
+
+  const seconds = parsed.timeout;
+  if (seconds !== undefined && (!Number.isFinite(seconds) || seconds <= 0)) {
+    return { exitCode: 2, stdout: `depug: --timeout wants seconds, and got ${seconds}\n\n${USAGE}` };
+  }
+
+  const result = await runRerun({
+    command: withoutGuard(parsed.command),
+    cwd: resolve(parsed.cwd ?? process.cwd()),
+    timeoutMs: seconds === undefined ? undefined : seconds * 1000,
+  });
+
+  // The child inherited stdio, so its output is already where it belongs.
+  // Only the fact that depug stopped it is depug's to report, and the
+  // supervisor has written that to stderr as it happened.
+  const note = result.timedOut
+    ? `depug rerun: stopped${result.killed ? " and killed" : ""} (exit ${TIMED_OUT})\n`
+    : "";
+  return { exitCode: result.exitCode, stdout: note };
 }
 
 /** A short list of values, with a count of the ones past the cap. */

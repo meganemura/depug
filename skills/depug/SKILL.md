@@ -14,7 +14,7 @@ two lines:
 
 ```text
 depug evidence: /abs/path/tmp/depug/run-20260902-2138-41207/002-parses-a-user.json (the failing call is in these frames)
-depug rerun: npx vitest run "test/user.test.ts" -t "parses a user" --sequence.seed=42
+depug rerun: npx depug rerun -- npx vitest run "test/user.test.ts" -t "parses a user" --sequence.seed=42
 ```
 
 Open the evidence path first. The parenthetical tells you whether that
@@ -31,6 +31,12 @@ file can answer:
 
 depug never runs the rerun command for you. Every verb below starts a
 process only when you invoke it.
+
+The rerun line carries `npx depug rerun --`. That runs the command under
+a clock and stops it after 120 seconds, because a test that stops
+returning holds a core and neither runner will end it. Run the line as
+printed. To paste it after a verb, paste it as printed too: the verbs
+carry their own clock and take the wrapper off.
 
 The verbs read whichever runner your command names, so `-- node --test
 path/to/file.test.ts` works the same way a vitest command does. node:test

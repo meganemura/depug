@@ -609,3 +609,57 @@ The cause of the drift is not known. Load average fell from 6.0 to 4.75
 across the three 137-171-199 runs, so other processes do not explain it.
 That machine had been running test suites for over two hours, which makes
 thermal throttling a candidate and an unverified one.
+
+## Put a clock on the command a failure prints (2026-09-11)
+
+The printed rerun line is the whole onboarding path, and an agent runs it
+without reading it. One machine was found carrying three runs of a
+command of that shape: two at 8 days 9 hours with their workers at 100 %
+CPU, one at 11 days 20 hours holding a file-watch handle, all of them
+started by sessions that no longer existed, with the machine's load
+average sitting at 4-5 for eight days.
+
+Four measurements decided the shape of the answer, on Node v26.7.0:
+
+- **`--test-timeout` cannot stop a synchronous loop.** With
+  `--test-timeout=2000` against `test('spins', () => { for (;;) {} })`,
+  both processes were still up at 7 s and the worker at 100 %. The timer
+  that flag needs lives on the worker's event loop, which is the thing
+  blocked.
+- **SIGKILL to the runner orphans the worker.** It survived at PPID 1,
+  99.3 % CPU. This is how the found processes got there.
+- **SIGTERM to the runner takes the worker with it.** The runner sits at
+  0 % while its worker spins, so its loop is free to handle the signal
+  and tear the run down.
+- **depug's own verbs already do the right thing, by accident of a
+  default.** `spawnSync`'s `timeout` sends SIGTERM, so a verb pointed at
+  a spinning test left nothing behind: measured at a 5 s budget, zero
+  survivors. Nothing had to change there, and it would have been easy to
+  change it wrongly without measuring first.
+
+So the exposure is narrow and specific: the line depug prints, run by
+someone whose session then ends without signalling anything.
+
+`depug rerun -- <command>` runs it under a clock, sends SIGTERM when the
+clock runs out, and escalates to SIGKILL only if that is ignored. It does
+not put the child in its own process group: sharing the caller's group is
+what lets a terminal or a session tearing down take the run with it,
+which is the half a timer cannot reach.
+
+Both reporters now print the wrapped form, and the re-execution verbs
+strip the wrapper back off, so the one printed line still serves both of
+its uses -- run it, or paste it after a verb -- without a reader editing
+it.
+
+An earlier attempt put the clock inside the runner instead, injected
+through `NODE_OPTIONS`, on the theory that a clock which survives the
+supervisor's own death would close the remaining gap. An unref'd timer
+there does not disturb a normal run (exit 0, under a second), but it did
+not stop a spinning one in any form tried, and a timer left ref'd hangs
+every run including the passing ones. It was dropped rather than shipped
+half-working.
+
+What is not covered: a supervisor that is itself SIGKILLed. Nothing it
+scheduled can run then, and the run it was watching is orphaned exactly
+as before. Closing that needs a clock inside the runner, which is the
+attempt above.

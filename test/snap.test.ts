@@ -149,12 +149,17 @@ describe("the run index", () => {
 describe("the printed rerun command", () => {
   it("runs that one test and no other", () => {
     const command = evidence[PROPAGATION_TEST].rerun_command!;
+    expect(command.startsWith("npx depug rerun -- ")).toBe(true);
     expect(command).toContain(PROPAGATION_TEST);
 
     // Execute the command's own arguments, rather than a re-derived set,
     // so this checks what was printed. `npx vitest` becomes the local
     // binary because the fixture is not a package of its own.
     const args = command
+      // The guard is what a reader runs; the rest is what selects the
+      // test. Both are checked: the prefix by the assertion above, the
+      // selection by executing what is left.
+      .replace(/^npx depug rerun -- /, "")
       .replace(/^npx vitest /, "")
       .match(/"[^"]*"|\S+/g)!
       .map((token) => (token.startsWith('"') ? JSON.parse(token) : token));
@@ -197,7 +202,12 @@ describe("a rerun command for a test inside a describe", () => {
     const parsed = JSON.parse(readFileSync(join(dir, file), "utf8")) as Evidence;
 
     const command = parsed.rerun_command!;
+    expect(command.startsWith("npx depug rerun -- ")).toBe(true);
     const args = command
+      // The guard is what a reader runs; the rest is what selects the
+      // test. Both are checked: the prefix by the assertion above, the
+      // selection by executing what is left.
+      .replace(/^npx depug rerun -- /, "")
       .replace(/^npx vitest /, "")
       .match(/"(?:[^"\\]|\\.)*"|\S+/g)!
       .map((token) => (token.startsWith('"') ? JSON.parse(token) : token));

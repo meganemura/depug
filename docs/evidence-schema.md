@@ -121,7 +121,7 @@ measurement behind that.
 | `test` | Object | always | Framework, name, file, line. |
 | `error` | Object | always | The failure itself. |
 | `frames` | Array | always | Stack frames in TypeScript coordinates. |
-| `rerun_command` | String or null | always | The complete command for this one test. |
+| `rerun_command` | String or null | always | The complete command for this one test, wrapped in `npx depug rerun --` so a run that never returns cannot outlive the reader. The re-execution verbs strip that wrapper back off, so the value can be pasted after one unchanged. |
 | `seed` | Integer or null | always | The runner's seed for this run. |
 | `skill` | String | when available | Absolute path to the installed skill. |
 

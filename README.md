@@ -189,6 +189,31 @@ written after its statement finishes. Read the `line` field. A loop keeps
 its first and last iteration and folds the middle into a marker carrying
 the count.
 
+### rerun — run it again, under a clock
+
+The rerun line a failure prints already carries this:
+
+```sh
+npx depug rerun -- npx vitest run "test/user.test.ts" -t "^parses a user$"
+```
+
+It runs the command and, if nothing comes back in time, stops it. The
+default is 120 seconds; `--timeout <s>` changes it.
+
+This is here because a test that stops returning takes a core with it and
+neither runner will stop it. `--test-timeout` cannot: the timer it needs
+runs on the worker's event loop, and the worker is what is blocked. One
+machine carried three runs of a printed rerun line for 8 to 12 days at a
+load average of 4-5. What does work is a signal to the runner, whose own
+loop is free, and that is what this sends.
+
+The re-execution verbs carry their own clock, so a printed line pasted
+after one is unwrapped rather than supervised twice:
+
+```sh
+depug frames -- npx depug rerun -- npx vitest run "test/user.test.ts" -t "^parses a user$"
+```
+
 ### exec — what would happen if the value were different?
 
 ```text

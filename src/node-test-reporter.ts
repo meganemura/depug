@@ -34,6 +34,7 @@ import {
 import { parseStack } from "./stack-parse.ts";
 import { hasProducerFrame, toEvidenceFrames } from "./stack.ts";
 import { toolVersion } from "./tool-version.ts";
+import { guardedCommand } from "./verbs/rerun.ts";
 
 interface TestFailEvent {
   type: string;
@@ -58,7 +59,9 @@ const REGEX_METACHARACTERS = /[.*+?^${}()|[\]\\]/g;
  */
 export function buildNodeRerunCommand(testFile: string, testName: string): string {
   const pattern = `^${testName.replace(REGEX_METACHARACTERS, "\\$&")}$`;
-  return `node --test --test-name-pattern=${JSON.stringify(pattern)} ${JSON.stringify(testFile)}`;
+  return guardedCommand(
+    `node --test --test-name-pattern=${JSON.stringify(pattern)} ${JSON.stringify(testFile)}`,
+  );
 }
 
 function guidance(producerPresent: boolean, frameCount: number): string {

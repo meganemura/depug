@@ -6,6 +6,7 @@
 // index beside them, and a `latest` symlink for the run that just
 // finished. Nothing here reads a file back; the verbs that do that read
 // what this module wrote.
+import { guardedCommand } from "./verbs/rerun.ts";
 import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CodeState } from "./code-state.ts";
@@ -143,7 +144,9 @@ export function buildRerunCommand({ testFile, namePath, seed }: RerunInput): str
     JSON.stringify(buildTestNamePattern(namePath)),
   ];
   if (seed !== null) parts.push(`--sequence.seed=${seed}`);
-  return parts.join(" ");
+  // Guarded, because this line is run by agents whose session can end
+  // while the run does not. `docs/design-decisions.md` holds why.
+  return guardedCommand(parts.join(" "));
 }
 
 export function writeJson(path: string, value: unknown): void {

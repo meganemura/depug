@@ -157,8 +157,13 @@ describe("the always-on layer under node --test", () => {
     const dir = join(outputDir, runs[0]);
     const propagation = readdirSync(dir).find((n) => n.includes("propagating"))!;
     const command = JSON.parse(readFileSync(join(dir, propagation), "utf8")).rerun_command as string;
+    expect(command.startsWith("npx depug rerun -- ")).toBe(true);
 
     const args = command
+      // The guard is what a reader runs; the rest is what selects the
+      // test. Both are checked: the prefix by the assertion above, the
+      // selection by executing what is left.
+      .replace(/^npx depug rerun -- /, "")
       .replace(/^node /, "")
       .match(/"(?:[^"\\]|\\.)*"|--test-name-pattern=(?:"(?:[^"\\]|\\.)*")|\S+/g)!
       .map((token) => (token.startsWith('"') ? JSON.parse(token) : token));

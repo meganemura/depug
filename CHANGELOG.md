@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.1.3 - 2026-09-11
+
+The command a failure prints now stops on its own.
+
+A test that stops returning takes a core with it, and neither runner will
+end it: `--test-timeout` needs a timer on the worker's event loop, and
+the worker is what is blocked. One machine was found carrying three runs
+of a printed rerun line for 8 to 12 days, started by sessions that no
+longer existed, at a load average of 4-5.
+
+The printed line is now wrapped:
+
+```sh
+npx depug rerun -- npx vitest run "test/user.test.ts" -t "^parses a user$"
+```
+
+`depug rerun` runs the command, and stops it if nothing comes back in
+120 seconds. `--timeout <s>` changes that. It signals the runner rather
+than killing it, because a signalled runner takes its workers down with
+it and a killed one leaves them spinning at PPID 1 -- which is how the
+found processes got there.
+
+The re-execution verbs already carried their own clock and already left
+nothing behind, so they are unchanged. They now strip the wrapper off a
+command pasted after them, so the printed line serves both of its uses
+unedited.
+
+A supervisor that is itself killed outright still cannot stop anything.
+`docs/design-decisions.md` holds the measurements and what they rule out.
+
 ## 0.1.2 - 2026-09-04
 
 What the first day of use in three projects asked for.
