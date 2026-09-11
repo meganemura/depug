@@ -52,9 +52,14 @@ export function corpusAvailable(dir: string = CLONE_DIR): boolean {
     // they could not find rather than skipping without a word.
     if (!announced) {
       announced = true;
-      // Written to the stream rather than through `console`, which the
-      // runner intercepts during collection and never prints -- where
-      // this decision is made.
+      // Written to the stream rather than through `console`. A
+      // `console.warn` from this exact position -- the argument to
+      // `describe.skipIf`, evaluated while the file is being collected --
+      // printed nothing here, while the stream printed. That is the whole
+      // of what was measured: a sibling project's `console.warn` from the
+      // tail of a `describe` body, also during collection, does print, so
+      // the rule is narrower than "collection is swallowed" and nobody
+      // here knows where its edge is. The stream has no such edge.
       // One line, because the runner gives each test file its own worker
       // and the flag above is per-worker: this prints once per corpus
       // file, not once per run.

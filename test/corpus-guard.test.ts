@@ -49,8 +49,9 @@ describe("corpusAvailable", () => {
     // pass. The warning is the only thing standing between those.
     const said: string[] = [];
     const write = process.stderr.write.bind(process.stderr);
-    // The stream, not `console`: the runner swallows console output from
-    // collection, which is when this runs.
+    // The stream, not `console`: a `console.warn` from where this runs
+    // printed nothing in the real suite, though the same call elsewhere
+    // during collection does print.
     process.stderr.write = ((chunk: string | Uint8Array) => {
       said.push(String(chunk));
       return true;
