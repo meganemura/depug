@@ -7,9 +7,9 @@
 // one a failure prints were found on one machine after 8 to 12 days,
 // each holding a core.
 //
-// The spinning fixture is written per test and its processes are matched
-// by a marker unique to that file, so a failure here cannot leave a
-// spinner running under someone else's name.
+// The blocking fixture is written per test and its processes are matched
+// by a marker unique to that file, so a failure here cannot leave one
+// running under someone else's name.
 import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -32,16 +32,25 @@ function survivors(needle: string): string[] {
   }
 }
 
-function spinner(): { file: string; needle: string } {
+function blocker(): { file: string; needle: string } {
   scratch = mkdtempSync(join(tmpdir(), "depug-rerun-"));
-  marker = `depugspin${process.pid}${Math.random().toString(36).slice(2, 8)}`;
+  marker = `depugblock${process.pid}${Math.random().toString(36).slice(2, 8)}`;
   const file = join(scratch, `${marker}.test.mjs`);
-  writeFileSync(file, 'import { test } from "node:test";\ntest("spins", () => { for (;;) {} });\n');
+  // `Atomics.wait` rather than a spin loop. The event loop is just as
+  // stuck either way, which is the property under test, but a spin loop
+  // burns a core for as long as it runs and this suite runs its files in
+  // parallel. A sibling project traced two flaky timing tests to exactly
+  // that and changed its own fixture the same way.
+  writeFileSync(
+    file,
+    'import { test } from "node:test";\n' +
+      'test("blocks", () => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0); });\n',
+  );
   return { file, needle: marker };
 }
 
 afterEach(() => {
-  // Belt and braces: whatever the assertions did, nothing spins on.
+  // Belt and braces: whatever the assertions did, nothing is left stuck.
   if (marker) {
     try {
       execFileSync("/bin/sh", ["-c", `pkill -9 -f ${JSON.stringify(marker)} || true`]);
@@ -67,7 +76,7 @@ describe("runRerun", () => {
   }, 60_000);
 
   it("stops a run that never returns, and leaves no process behind", async () => {
-    const { file, needle } = spinner();
+    const { file, needle } = blocker();
 
     const result = await runRerun({
       command: ["node", "--test", file],
