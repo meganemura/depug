@@ -43,8 +43,27 @@ export interface CorpusFile {
  * read the skip as a pass, so it says what is wrong with the path they
  * gave.
  */
+let announced = false;
+
 export function corpusAvailable(dir: string = CLONE_DIR): boolean {
-  if (dir === "") return false;
+  if (dir === "") {
+    // A bare "2 skipped" does not say which two, or what would run them.
+    // Borrowed from a sibling project, whose browser tests name the thing
+    // they could not find rather than skipping without a word.
+    if (!announced) {
+      announced = true;
+      // Written to the stream rather than through `console`, which the
+      // runner intercepts during collection and never prints -- where
+      // this decision is made.
+      // One line, because the runner gives each test file its own worker
+      // and the flag above is per-worker: this prints once per corpus
+      // file, not once per run.
+      process.stderr.write(
+        "corpus tests skipped: DEPUG_CORPUS_DIR is unset (docs/maintenance.md)\n",
+      );
+    }
+    return false;
+  }
 
   const reason = corpusProblem(dir);
   if (reason !== undefined) {

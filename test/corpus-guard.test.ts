@@ -43,8 +43,24 @@ describe("corpusProblem", () => {
 });
 
 describe("corpusAvailable", () => {
-  it("skips quietly when nobody asked for the corpus", () => {
-    expect(corpusAvailable("")).toBe(false);
+  it("skips when nobody asked, and says which variable would run it", () => {
+    // A bare "2 skipped" in the summary names neither the tests nor the
+    // way to run them, and a reader who wanted the corpus reads it as a
+    // pass. The warning is the only thing standing between those.
+    const said: string[] = [];
+    const write = process.stderr.write.bind(process.stderr);
+    // The stream, not `console`: the runner swallows console output from
+    // collection, which is when this runs.
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      said.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      expect(corpusAvailable("")).toBe(false);
+    } finally {
+      process.stderr.write = write;
+    }
+    expect(said.join("")).toContain("DEPUG_CORPUS_DIR");
   });
 
   it("raises when the corpus was asked for and cannot be read", () => {
