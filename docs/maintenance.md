@@ -30,14 +30,22 @@ codebase is how the empty-body offset collision came out, with every
 fixture passing while six real files produced unparseable output.
 
 The corpus is honojs/hono at commit
-`e2740d5a1bd0b4254e517e3af8b60789284bc7bd`. It lives outside this
-repository and is not fetched automatically, so both tests skip when it is
-absent:
+`e2740d5a1bd0b4254e517e3af8b60789284bc7bd`. It is not fetched
+automatically, so both tests skip when `DEPUG_CORPUS_DIR` is unset:
 
 ```sh
-git clone https://github.com/honojs/hono.git /tmp/hono
-DEPUG_CORPUS_DIR=/tmp/hono npm test
+git clone --filter=blob:none https://github.com/honojs/hono.git tmp/corpus/hono
+DEPUG_CORPUS_DIR=tmp/corpus/hono npm test
 ```
+
+**Keep the clone somewhere that survives a reboot.** `tmp/` under this
+repository is ignored by git and does. A clone under the system's `/tmp`
+was cleared here between two sittings, leaving the directory without the
+repository, and the checks skipped: two runs were reported as green with
+the corpus before the skipped count gave it away. A path that is set and
+unreadable now raises and names what is wrong with it, rather than
+skipping -- a skip reads as a pass, and only an unset variable should
+produce one.
 
 They assert 188 files, 0 changed line counts, and 0 new syntax errors.
 `test/support/corpus.ts` extracts the tree once with `git archive` and

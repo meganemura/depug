@@ -6,14 +6,23 @@
 // `git archive` extracts the whole tree in a single call, and the files
 // are then ordinary reads.
 //
-// The clone lives outside this repository and is not fetched here, so a
-// caller checks `corpusAvailable()` and skips rather than fails.
+// The clone is not fetched here, so a caller checks `corpusAvailable()`
+// and skips when nobody asked for it. When somebody did ask -- the
+// variable is set -- an unusable clone raises instead of skipping. A
+// skip reads as a pass, and the difference is easy to miss: a clone under
+// `/tmp` disappeared on this machine and two runs were reported as
+// "green with the corpus" before the skipped count gave it away.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
-/** Point this at a clone of honojs/hono to run the corpus checks. */
+/**
+ * Point this at a clone of honojs/hono to run the corpus checks.
+ *
+ * Put it somewhere that survives a reboot. `tmp/corpus/hono` under this
+ * repository is ignored by git and is the path the maintenance notes use.
+ */
 export const CLONE_DIR = process.env.DEPUG_CORPUS_DIR ?? "";
 export const COMMIT_SHA = "e2740d5a1bd0b4254e517e3af8b60789284bc7bd";
 
@@ -25,16 +34,48 @@ export interface CorpusFile {
   source: string;
 }
 
-export function corpusAvailable(): boolean {
-  if (CLONE_DIR === "" || !existsSync(CLONE_DIR)) return false;
-  try {
-    execFileSync("git", ["-C", CLONE_DIR, "cat-file", "-e", COMMIT_SHA], { stdio: "ignore" });
-    return true;
-  } catch {
-    // A clone can exist without this commit, after a shallow re-clone or a
-    // prune; either way there is nothing to read it from.
-    return false;
+/**
+ * Whether the corpus checks can run, raising where they were asked for
+ * and cannot.
+ *
+ * An empty variable means nobody asked, and the checks skip. A variable
+ * pointing at something unusable means somebody asked and will otherwise
+ * read the skip as a pass, so it says what is wrong with the path they
+ * gave.
+ */
+export function corpusAvailable(dir: string = CLONE_DIR): boolean {
+  if (dir === "") return false;
+
+  const reason = corpusProblem(dir);
+  if (reason !== undefined) {
+    throw new Error(
+      `DEPUG_CORPUS_DIR points at ${dir}, and ${reason}.\n` +
+        "The corpus checks were asked for and cannot run. Clone it with\n" +
+        `  git clone --filter=blob:none https://github.com/honojs/hono.git ${dir}\n` +
+        "or unset DEPUG_CORPUS_DIR to skip them.",
+    );
   }
+  return true;
+}
+
+/** What is wrong with a corpus path, or undefined where nothing is. */
+export function corpusProblem(dir: string): string | undefined {
+  if (!existsSync(dir)) return "there is nothing there";
+  try {
+    execFileSync("git", ["-C", dir, "rev-parse", "--git-dir"], { stdio: "ignore" });
+  } catch {
+    // The usual cause is a clone under /tmp that the system cleared,
+    // leaving the directory but not the repository.
+    return "it is not a git repository";
+  }
+  try {
+    execFileSync("git", ["-C", dir, "cat-file", "-e", COMMIT_SHA], { stdio: "ignore" });
+  } catch {
+    // A clone can exist without this commit, after a shallow re-clone or
+    // a prune; either way there is nothing to read it from.
+    return `it does not hold commit ${COMMIT_SHA.slice(0, 12)}`;
+  }
+  return undefined;
 }
 
 function walk(dir: string, out: string[]): void {
