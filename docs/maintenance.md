@@ -190,15 +190,22 @@ first pass and only surfaced from an installed package.
 
 ## Releasing
 
-This repository holds no release workflow, so a release is what the owner
-does by hand. Publishing to npm, changing the repository's visibility, and
-pushing a tag are each their decision at that moment.
+Pushing a `v*` tag runs
+[`.github/workflows/publish.yml`](../.github/workflows/publish.yml). The
+job waits for the GitHub Environment `publish`, then publishes with
+GitHub Actions OIDC. It stores no `NPM_TOKEN`. The one-time Trusted
+Publisher setup, and what each version does, are in
+[`docs/releasing.md`](releasing.md). Whether to tag, and whether to
+approve that environment, stay the owner's decision at that moment.
+Changing the repository's visibility is the same kind of decision, and
+this workflow does not make it.
 
 The package name carries a scope, and npm treats a scoped package as
 private unless it is told otherwise. `publishConfig.access` says `public`
 in `package.json` so that the setting travels with the package instead of
-depending on a flag somebody remembers to type. Why the name has a scope
-at all is in `docs/design-decisions.md`.
+depending on a flag somebody remembers to type. The package is already
+public on the registry, so a later `npm publish` needs no `--access`
+flag. Why the name has a scope at all is in `docs/design-decisions.md`.
 
 What to check first:
 
