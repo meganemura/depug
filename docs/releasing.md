@@ -4,13 +4,23 @@
 were published by hand, and an unauthenticated `npm view` reads them.
 A later release is the npm package and a git tag whose name is `v` plus
 the `package.json` version. Pushing that tag runs
-[`.github/workflows/publish.yml`](../.github/workflows/publish.yml). The
-workflow checks the tag against `package.json`, installs the tagged
-commit, builds `dist/`, runs `npm test`, refuses the run if any tracked
-file changed, and runs `npm publish`. npm authenticates with GitHub
-Actions OIDC. Provenance is attached automatically because the repository
-and the package are public. The GitHub Environment `publish` is the human
-gate: the job waits there until it is approved.
+[`.github/workflows/publish.yml`](../.github/workflows/publish.yml).
+
+That workflow is the steady-state path. It checks the tag against
+`package.json`, installs the tagged commit, builds `dist/`, runs
+`npm test`, refuses the run if any tracked file changed, and runs
+`npm publish`. npm authenticates with GitHub Actions OIDC. Provenance
+is attached automatically because the repository and the package are
+public. The job sets `environment: publish`. That Environment is the
+human gate: the job waits there until a required reviewer approves it.
+
+Registering the Trusted Publisher does not create a pending approval.
+The approval appears only when a `v*` tag run enters the Environment
+`publish`.
+
+The Trusted Publisher and the Environment `publish` are already
+configured, as of 2026-09-23. Recreate one only if it is missing. The
+next section records the values to put back.
 
 The package ships compiled JavaScript in `dist/`. `dist/` is gitignored.
 The workflow builds it from the tagged commit, and that build is what the
@@ -30,40 +40,63 @@ the run before the upload.
 
 The workflow stores no `NPM_TOKEN`. The repository secrets do not keep
 one either. There is no token bootstrap: the package already exists, so
-a Trusted Publisher can be attached directly.
+the Trusted Publisher is attached directly.
 
-## One-time setup
+## Trusted Publisher and Environment
 
 These are human steps. Nothing in this repository creates the Environment
-or registers the trusted publisher.
+or registers the trusted publisher. Both are already in place. The
+values below are what to enter if one of them is missing.
 
-1. On the GitHub repository `meganemura/depug`, create an Environment
-   named `publish` and require reviewers. The workflow job sets
-   `environment: publish`, so a run waits until a reviewer approves it.
-   Create the Environment before the first tag. Otherwise GitHub creates
-   it on the first run with no required reviewers, and that run publishes
-   as soon as the checks pass.
+The package page is the scoped URL
+`https://www.npmjs.com/package/@meganemura/depug`. The Trusted Publisher
+on that page is one GitHub Actions publisher, and its Repository field
+is the GitHub repository name `depug`. The fields are case-sensitive:
 
-2. On the `@meganemura/depug` package on npmjs.com, add one GitHub Actions
-   trusted publisher. The fields are case-sensitive:
+- Organization or user: `meganemura`
+- Repository: `depug`
+- Workflow filename: `publish.yml` (the filename, including `.yml`)
+- Environment name: `publish`
+- Allowed action: `npm publish`
 
-   - Organization or user: `meganemura`
-   - Repository: `depug`
-   - Workflow filename: `publish.yml` (the filename, including `.yml`)
-   - Environment name: `publish`
-   - Allowed action: `npm publish`
+A trusted publisher created after 3 September 2026 starts with
+`npm stage publish` allowed. Select `npm publish` as well.
+`publish.yml` runs `npm publish`.
 
-   A trusted publisher created after 3 September 2026 starts with
-   `npm stage publish` allowed. Select `npm publish` as well.
-   `publish.yml` runs `npm publish`.
+`package.json` `repository.url` is already
+`git+https://github.com/meganemura/depug.git`. npm checks that URL
+against the workflow repository.
 
-   `package.json` `repository.url` is already
-   `git+https://github.com/meganemura/depug.git`. npm checks that URL
-   against the workflow repository.
+On the GitHub repository `meganemura/depug`, the Environment is named
+`publish` and requires reviewers. The workflow job sets
+`environment: publish`, so a run waits until a reviewer approves it.
+If that Environment has been removed, create it again, with required
+reviewers, before the next tag. Otherwise GitHub creates it on that
+run with no required reviewers, and that run publishes as soon as the
+checks pass.
 
-3. After the first publish from Actions succeeds, the package settings
-   can require two-factor authentication and disallow token publishing.
-   The trusted publisher keeps working.
+Saving the publisher still does not open a review. The approval shows
+up on the Actions run for the tag, when that run enters `publish`.
+
+After an OIDC publish from `publish.yml` has succeeded, the package
+settings can be tightened. This is optional, and it waits until that
+exchange has worked. Under Publishing access, select "Require
+two-factor authentication and disallow tokens". That blocks granular
+access tokens. The Trusted Publisher keeps working, because it
+authenticates with the OIDC exchange.
+
+## Pinned actions
+
+`publish.yml` names each action by a full 40-character commit SHA and
+leaves the release tag in a comment:
+
+- `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1`
+- `actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0`
+
+The repository's Actions permissions have `sha_pinning_required`
+enabled, so every action must be pinned to a full-length commit SHA. An
+action named by a tag or a branch fails that policy before any step
+runs. A later bump replaces the SHA and the version comment together.
 
 ## Each version
 
@@ -85,15 +118,17 @@ corpus tests skip there. Run them before the tag.
    tag. The tag push starts the workflow. This publish is `publish.yml`
    only. Do not run `npm publish` from a checkout.
 
-4. Approve the `publish` environment on that Actions run. The workflow
-   uses Node 24 on `ubuntu-latest` with the npm registry URL set. It
-   requires npm 11.5.1 or newer, the release that can exchange a GitHub
-   OIDC token for a publish. It runs `npm ci`, `npm run build`, and
-   `npm test`, then refuses the run if any tracked file changed. `dist/`
-   is gitignored, so the new build output is expected and is what gets
-   packed. Then it runs `npm publish`, which runs `prepublishOnly` and
-   builds again. The package `engines` field stays `>=22.18.0`. Node 24
-   is the publish job, not a new requirement for people running depug.
+4. Approve the `publish` environment on that Actions run. The review is
+   requested when the job enters the environment, which is this run.
+   The workflow uses Node 24 on `ubuntu-latest` with the npm registry
+   URL set. It requires npm 11.5.1 or newer, the release that can
+   exchange a GitHub OIDC token for a publish. It runs `npm ci`,
+   `npm run build`, and `npm test`, then refuses the run if any tracked
+   file changed. `dist/` is gitignored, so the new build output is
+   expected and is what gets packed. Then it runs `npm publish`, which
+   runs `prepublishOnly` and builds again. The package `engines` field
+   stays `>=22.18.0`. Node 24 is the publish job, not a new requirement
+   for people running depug.
 
 5. `--notes-file CHANGELOG.md` would paste every version's notes into
    the release, so extract that version's section first. Set `version`

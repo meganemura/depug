@@ -193,8 +193,9 @@ first pass and only surfaced from an installed package.
 Pushing a `v*` tag runs
 [`.github/workflows/publish.yml`](../.github/workflows/publish.yml). The
 job waits for the GitHub Environment `publish`, then publishes with
-GitHub Actions OIDC. It stores no `NPM_TOKEN`. The one-time Trusted
-Publisher setup, and what each version does, are in
+GitHub Actions OIDC. It stores no `NPM_TOKEN`. The Trusted Publisher
+and that Environment are already configured. The field values, when the
+approval appears, and what each version does are in
 [`docs/releasing.md`](releasing.md). Whether to tag, and whether to
 approve that environment, stay the owner's decision at that moment.
 Changing the repository's visibility is the same kind of decision, and
