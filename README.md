@@ -1,6 +1,6 @@
 # depug
 
-[![npm version](https://img.shields.io/npm/v/@meganemura/depug)](https://www.npmjs.com/package/@meganemura/depug)
+[![npm version](https://img.shields.io/npm/v/@meganemura/depug?logo=npm)](https://www.npmjs.com/package/@meganemura/depug)
 
 depug turns TypeScript test failures into evidence a coding agent can read,
 and answers questions about a run by measuring it rather than by reading
