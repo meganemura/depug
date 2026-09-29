@@ -2,17 +2,23 @@
 
 `@meganemura/depug` is already on npm. Versions `0.1.0` through `0.1.3`
 were published by hand, and an unauthenticated `npm view` reads them.
-A later release is the npm package and a git tag whose name is `v` plus
-the `package.json` version. Pushing that tag runs
+A later release is the npm package, a git tag whose name is `v` plus
+the `package.json` version, and a GitHub release for that tag. Pushing
+the tag runs
 [`.github/workflows/publish.yml`](../.github/workflows/publish.yml).
 
 That workflow is the steady-state path. It checks the tag against
 `package.json`, installs the tagged commit, builds `dist/`, runs
 `npm test`, refuses the run if any tracked file changed, and runs
-`npm publish`. npm authenticates with GitHub Actions OIDC. Provenance
-is attached automatically because the repository and the package are
-public. The job sets `environment: publish`. That Environment is the
-human gate: the job waits there until a required reviewer approves it.
+`npm publish`. After that publish succeeds, a second job creates the
+GitHub release for the same tag. The publish job keeps `contents: read`
+and is the only job that holds the npm OIDC token. The release job asks
+for `contents: write` and nothing else, so the token that can publish
+the package cannot also write repository contents. npm authenticates
+with GitHub Actions OIDC. Provenance is attached automatically because
+the repository and the package are public. The publish job sets
+`environment: publish`. That Environment is the human gate: the job
+waits there until a required reviewer approves it.
 
 Registering the Trusted Publisher does not create a pending approval.
 The approval appears only when a `v*` tag run enters the Environment
@@ -93,6 +99,11 @@ leaves the release tag in a comment:
 - `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1`
 - `actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0`
 
+The release job checks out with that same `actions/checkout` SHA, and
+it checks out `github.sha`, the commit the publish job built. It does
+not run `actions/setup-node`: creating the release does not install
+the package.
+
 The repository's Actions permissions have `sha_pinning_required`
 enabled, so every action must be pinned to a full-length commit SHA. An
 action named by a tag or a branch fails that policy before any step
@@ -130,13 +141,18 @@ corpus tests skip there. Run them before the tag.
    stays `>=22.18.0`. Node 24 is the publish job, not a new requirement
    for people running depug.
 
-5. `--notes-file CHANGELOG.md` would paste every version's notes into
-   the release, so extract that version's section first. Set `version`
+5. After `npm publish` succeeds, the workflow's `release` job creates
+   the GitHub release. It checks out the same commit the publish job
+   built, extracts only that version's section from `CHANGELOG.md`
+   (`--notes-file CHANGELOG.md` would carry every version), and runs
+   `gh release create --verify-tag`. A release that already exists is
+   left in place, so re-running the tag is safe. If that job fails,
+   extract the section and create the release by hand. Set `version`
    to the version you tagged. `0.1.3` below is the heading already in
    the changelog, so the pattern is visible; substitute the new version:
 
    ```sh
    version=0.1.3
-   awk -v version="$version" '$0 ~ "^## " version {f=1; next} /^## / {f=0} f' CHANGELOG.md > notes.md
-   gh release create "v$version" --title "v$version" --notes-file notes.md
+   awk -v v="$version" '$0 ~ "^## " v " " {in_version=1; next} /^## /{in_version=0} in_version' CHANGELOG.md > notes.md
+   gh release create "v$version" --title "v$version" --notes-file notes.md --verify-tag
    ```
