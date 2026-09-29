@@ -64,6 +64,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "tsc --noEmit && vitest run",
+    "archstrict": "archstrict check",
     "coverage": "vitest run --coverage",
     "prepublishOnly": "npm run build"
   },
@@ -74,6 +75,7 @@
     "@hegeldev/hegel": "0.4.5",
     "@types/node": "26.4.0",
     "@vitest/coverage-v8": "4.1.11",
+    "archstrict": "0.1.0",
     "vitest": "4.1.11"
   }
 }

@@ -11,6 +11,10 @@ npm test
 Type-checks, then runs 205 tests. Two of them skip unless a corpus is
 available. `npm run typecheck` and `npm run coverage` run either part on
 its own, and `npm run build` compiles what gets published.
+`npm run archstrict` checks the module boundaries declared in
+`archstrict.config.ts`. It is separate from `npm test`: the suite proves
+what a run does, and this check proves an import stays inside the module
+that owns it.
 
 The suite deliberately does not need the build. It loads depug by path,
 never by package name, so a checkout that has only been installed can run
@@ -159,10 +163,11 @@ carries its own parser rather than asking the host for one, so a project
 installs depug whatever compiler it is on; `docs/design-decisions.md`
 holds the measurement that decided it.
 
-Four development dependencies, all pinned exactly: `vitest` to run,
-`@types/node` to type-check against, `hegel` for the properties, and
-vitest's v8 coverage provider. `typescript` is not among them, because
-one version written in two places drifts.
+Five development dependencies, all pinned exactly: `vitest` to run,
+`@types/node` to type-check against, `hegel` for the properties, vitest's
+v8 coverage provider, and `archstrict` `0.1.0` (published 2026-09-29) to
+check module boundaries. `typescript` is not among them, because one
+version written in two places drifts.
 
 Another needs the owner's approval, an exact pin, and a version at least
 seven days old with no later security fix. `typescript` must not gain a
