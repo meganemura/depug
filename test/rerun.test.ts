@@ -15,7 +15,8 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { TIMED_OUT, guardedCommand, runRerun, withoutGuard } from "../src/verbs/rerun.ts";
+import { guardedCommand } from "../src/rerun-guard.ts";
+import { TIMED_OUT, runRerun, withoutGuard } from "../src/verbs/rerun.ts";
 
 let scratch: string | undefined;
 let marker: string | undefined;

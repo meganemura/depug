@@ -34,7 +34,7 @@ import {
 import { parseStack } from "./stack-parse.ts";
 import { hasProducerFrame, toEvidenceFrames } from "./stack.ts";
 import { toolVersion } from "./tool-version.ts";
-import { guardedCommand } from "./verbs/rerun.ts";
+import { guardedCommand } from "./rerun-guard.ts";
 
 interface TestFailEvent {
   type: string;

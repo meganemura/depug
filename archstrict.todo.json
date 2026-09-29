@@ -1,8 +1,5 @@
 {
   "schemaVersion": 1,
   "modules": {
-    "evidence.ts": [
-      {"rule":"cycle","path":"src/evidence.ts","evidence":"evidence.ts -> verbs -> evidence.ts"}
-    ]
   }
 }

@@ -6,7 +6,7 @@
 // index beside them, and a `latest` symlink for the run that just
 // finished. Nothing here reads a file back; the verbs that do that read
 // what this module wrote.
-import { guardedCommand } from "./verbs/rerun.ts";
+import { guardedCommand } from "./rerun-guard.ts";
 import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CodeState } from "./code-state.ts";

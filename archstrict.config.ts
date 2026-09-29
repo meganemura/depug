@@ -36,7 +36,8 @@ export default {
   // one per TypeScript source file, so every file that check analyzes
   // belongs to exactly one module. src/ is flat apart from src/verbs, so
   // the file modules stay. verbs is the directory: its surface is the files
-  // the CLI and the failure text import, and probe-config.ts stays private.
+  // the CLI imports, and probe-config.ts stays private. The failure text
+  // imports the rerun prefix from rerun-guard.ts, below the verb.
   // init never rewrites this file. After an edit, run archstrict init to
   // regenerate archstrict.types.ts.
   declaredModules: [
@@ -73,6 +74,7 @@ export default {
     { name: "probe-setup.ts", glob: "src/probe-setup.ts", surface: "probe-setup.ts" },
     { name: "probe-transform.ts", glob: "src/probe-transform.ts", surface: "probe-transform.ts" },
     { name: "reporter.ts", glob: "src/reporter.ts", surface: "reporter.ts" },
+    { name: "rerun-guard.ts", glob: "src/rerun-guard.ts", surface: "rerun-guard.ts" },
     { name: "runner.ts", glob: "src/runner.ts", surface: "runner.ts" },
     { name: "runtime.ts", glob: "src/runtime.ts", surface: "runtime.ts" },
     { name: "setup.ts", glob: "src/setup.ts", surface: "setup.ts" },
@@ -85,9 +87,9 @@ export default {
     {
       name: "verbs",
       glob: "src/verbs/**",
-      // cli.ts imports each verb. evidence.ts and node-test-reporter.ts
-      // import the guard in rerun.ts. probe-config.ts is reached only from
-      // probe.ts, so it is not on this list.
+      // cli.ts imports each verb. The failure text imports the guard from
+      // rerun-guard.ts, not from this directory. probe-config.ts is reached
+      // only from probe.ts, so it is not on this list.
       surface: ["exec.ts", "flt.ts", "frames.ts", "preflight.ts", "probe.ts", "rerun.ts"],
     },
     { name: "wrapper-config.ts", glob: "src/wrapper-config.ts", surface: "wrapper-config.ts" },
@@ -96,5 +98,5 @@ export default {
     { name: "vitest.config.ts", glob: "vitest.config.ts", surface: "vitest.config.ts" },
   ],
   because:
-    "src is flat apart from src/verbs, so each source file is its own module and verbs is the directory. The verb surface is the files the CLI and the failure text import; probe-config.ts stays private.",
+    "src is flat apart from src/verbs, so each source file is its own module and verbs is the directory. The verb surface is the files the CLI imports; probe-config.ts stays private. rerun-guard.ts holds the prefix the failure text prints. evidence.ts and the node:test reporter imported it from the verb, and the verbs import the schema from evidence.ts, which was one frozen cycle (evidence.ts -> verbs -> evidence.ts). The prefix moved down; the schema stayed, so the verbs do not import more of evidence.",
 } satisfies Config;

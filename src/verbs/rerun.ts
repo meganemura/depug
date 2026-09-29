@@ -21,6 +21,7 @@
 // run with it, which is the other half of the problem and the half a
 // timer cannot reach.
 import { spawn } from "node:child_process";
+import { RERUN_PREFIX } from "../rerun-guard.ts";
 
 /** The exit status of a run this verb stopped, following `timeout(1)`. */
 export const TIMED_OUT = 124;
@@ -116,32 +117,22 @@ export function runRerun(input: RunRerunInput): Promise<RerunResult> {
 }
 
 /**
- * The command a reader should actually run, given the plain one.
- *
- * Kept beside the supervisor because the two have to agree: the prefix
- * this writes is the prefix the re-execution verbs strip back off.
- */
-export const RERUN_PREFIX = ["npx", "depug", "rerun", "--"] as const;
-
-/** Wraps a plain command in the guarded form. */
-export function guardedCommand(command: string): string {
-  return `${RERUN_PREFIX.join(" ")} ${command}`;
-}
-
-/**
  * Removes a guard prefix from a command, if one is there.
  *
  * A verb supplies its own clock, so a rerun line pasted after one would
  * otherwise run two supervisors deep for no gain. This lets the printed
  * line serve both uses unchanged: run it, or paste it after a verb.
+ * The words of the prefix live in rerun-guard.ts, which is what the
+ * failure text imports; this strip reads that same constant.
  */
 export function withoutGuard(command: readonly string[]): string[] {
+  const [npx, depug, rerun, dash] = RERUN_PREFIX;
   const rest = [...command];
-  if (rest[0] === "npx") rest.shift();
-  if (rest[0] !== "depug" && !rest[0]?.endsWith("/depug")) return [...command];
-  if (rest[1] !== "rerun") return [...command];
+  if (rest[0] === npx) rest.shift();
+  if (rest[0] !== depug && !rest[0]?.endsWith(`/${depug}`)) return [...command];
+  if (rest[1] !== rerun) return [...command];
   rest.splice(0, 2);
   // `--` is optional here: the caller may have dropped it while editing.
-  if (rest[0] === "--") rest.shift();
+  if (rest[0] === dash) rest.shift();
   return rest.length > 0 ? rest : [...command];
 }
