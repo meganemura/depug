@@ -16,7 +16,7 @@ import { DEFAULT_LIMITS, SCHEMA_VERSION, type Limits } from "../evidence.ts";
 import type { ParsedFid } from "../fid.ts";
 import { readFltWorkerFiles, type FltWorkerFile } from "../flt-collector.ts";
 import type { FltRecord } from "../flt-runtime.ts";
-import { writeFltWrapperConfig } from "../flt-wrapper-config.ts";
+import { writeFltWrapperConfig } from "./flt-wrapper-config.ts";
 import { applyConfigArgument } from "../wrapper-config.ts";
 import { detectRunner, withNodeTestHook } from "../runner.ts";
 

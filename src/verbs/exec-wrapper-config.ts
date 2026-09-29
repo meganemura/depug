@@ -1,10 +1,14 @@
 // Generates the config that loads the injection rewrite. The rules it
 // follows live in wrapper-config.ts, shared with every other verb.
+//
+// The file sits with the verb, as probe-config.ts does. The plugin it
+// names stays in src/, so the path is one directory up: a sibling path
+// from here would look for the plugin inside src/verbs.
 import { dirname, resolve } from "node:path";
-import { siblingPath } from "./sibling.ts";
-import { writeGeneratedConfig, type Wrapper } from "./wrapper-config.ts";
+import { modulePath } from "../sibling.ts";
+import { writeGeneratedConfig, type Wrapper } from "../wrapper-config.ts";
 
-const PLUGIN_MODULE = siblingPath("exec-plugin", import.meta.url);
+const PLUGIN_MODULE = modulePath("../exec-plugin", import.meta.url);
 
 export interface ExecWrapperInput {
   cwd: string;

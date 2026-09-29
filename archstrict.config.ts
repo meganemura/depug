@@ -36,8 +36,9 @@ export default {
   // one per TypeScript source file, so every file that check analyzes
   // belongs to exactly one module. src/ is flat apart from src/verbs, so
   // the file modules stay. verbs is the directory: its surface is the files
-  // the CLI imports, and probe-config.ts stays private. The failure text
-  // imports the rerun prefix from rerun-guard.ts, below the verb.
+  // the CLI imports. probe-config.ts, exec-wrapper-config.ts, and
+  // flt-wrapper-config.ts stay private inside that directory. The failure
+  // text imports the rerun prefix from rerun-guard.ts, below the verb.
   // init never rewrites this file. After an edit, run archstrict init to
   // regenerate archstrict.types.ts.
   declaredModules: [
@@ -52,7 +53,6 @@ export default {
     { name: "exec-runtime.ts", glob: "src/exec-runtime.ts", surface: "exec-runtime.ts" },
     { name: "exec-setup.ts", glob: "src/exec-setup.ts", surface: "exec-setup.ts" },
     { name: "exec-transform.ts", glob: "src/exec-transform.ts", surface: "exec-transform.ts" },
-    { name: "exec-wrapper-config.ts", glob: "src/exec-wrapper-config.ts", surface: "exec-wrapper-config.ts" },
     { name: "fid.ts", glob: "src/fid.ts", surface: "fid.ts" },
     { name: "flt-collector.ts", glob: "src/flt-collector.ts", surface: "flt-collector.ts" },
     { name: "flt-plugin.ts", glob: "src/flt-plugin.ts", surface: "flt-plugin.ts" },
@@ -60,7 +60,6 @@ export default {
     { name: "flt-runtime.ts", glob: "src/flt-runtime.ts", surface: "flt-runtime.ts" },
     { name: "flt-setup.ts", glob: "src/flt-setup.ts", surface: "flt-setup.ts" },
     { name: "flt-transform.ts", glob: "src/flt-transform.ts", surface: "flt-transform.ts" },
-    { name: "flt-wrapper-config.ts", glob: "src/flt-wrapper-config.ts", surface: "flt-wrapper-config.ts" },
     { name: "function-identity.ts", glob: "src/function-identity.ts", surface: "function-identity.ts" },
     { name: "function-range.ts", glob: "src/function-range.ts", surface: "function-range.ts" },
     { name: "include.ts", glob: "src/include.ts", surface: "include.ts" },
@@ -88,8 +87,9 @@ export default {
       name: "verbs",
       glob: "src/verbs/**",
       // cli.ts imports each verb. The failure text imports the guard from
-      // rerun-guard.ts, not from this directory. probe-config.ts is reached
-      // only from probe.ts, so it is not on this list.
+      // rerun-guard.ts, not from this directory. probe-config.ts,
+      // exec-wrapper-config.ts, and flt-wrapper-config.ts are reached only
+      // from their own verb, so they are not on this list.
       surface: ["exec.ts", "flt.ts", "frames.ts", "preflight.ts", "probe.ts", "rerun.ts"],
     },
     { name: "wrapper-config.ts", glob: "src/wrapper-config.ts", surface: "wrapper-config.ts" },
@@ -98,5 +98,5 @@ export default {
     { name: "vitest.config.ts", glob: "vitest.config.ts", surface: "vitest.config.ts" },
   ],
   because:
-    "src is flat apart from src/verbs, so each source file is its own module and verbs is the directory. The verb surface is the files the CLI imports; probe-config.ts stays private. rerun-guard.ts holds the prefix the failure text prints. evidence.ts and the node:test reporter imported it from the verb, and the verbs import the schema from evidence.ts, which was one frozen cycle (evidence.ts -> verbs -> evidence.ts). The prefix moved down; the schema stayed, so the verbs do not import more of evidence.",
+    "src is flat apart from src/verbs, so each source file is its own module and verbs is the directory. The verb surface is the files the CLI imports. rerun-guard.ts holds the prefix the failure text prints; moving it out of the verb removed the one frozen cycle evidence.ts -> verbs -> evidence.ts, and the verbs still import the schema from evidence.ts. probe-config.ts, exec-wrapper-config.ts, and flt-wrapper-config.ts stay private inside verbs. The exec and flt generators co-changed with verbs on every one of their own commits (3 of 3, and 4 of 4) and nothing outside verbs imported them. wrapper-config.ts remains the shared generator: its fan-in was cli, verbs, and those two files.",
 } satisfies Config;

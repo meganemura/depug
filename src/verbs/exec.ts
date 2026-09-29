@@ -17,7 +17,7 @@ import { readCodeState, type CodeState } from "../code-state.ts";
 import { SCHEMA_VERSION } from "../evidence.ts";
 import { parseFid } from "../fid.ts";
 import { EXEC_TOKEN, type ExecRecord } from "../exec-runtime.ts";
-import { writeExecWrapperConfig } from "../exec-wrapper-config.ts";
+import { writeExecWrapperConfig } from "./exec-wrapper-config.ts";
 import { applyConfigArgument } from "../wrapper-config.ts";
 import { detectRunner, withNodeTestHook, type Runner } from "../runner.ts";
 

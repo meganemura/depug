@@ -2,11 +2,15 @@
 // project's own test run. The rules it follows -- where the file goes, why
 // it goes there, and how a project with no config of its own is handled --
 // live in wrapper-config.ts, which every verb's generated config shares.
+//
+// The file sits with the verb, as probe-config.ts does. The plugin it
+// names stays in src/, so the path is one directory up: a sibling path
+// from here would look for the plugin inside src/verbs.
 import { dirname, resolve } from "node:path";
-import { siblingPath } from "./sibling.ts";
-import { writeGeneratedConfig, type Wrapper } from "./wrapper-config.ts";
+import { modulePath } from "../sibling.ts";
+import { writeGeneratedConfig, type Wrapper } from "../wrapper-config.ts";
 
-const PLUGIN_MODULE = siblingPath("flt-plugin", import.meta.url);
+const PLUGIN_MODULE = modulePath("../flt-plugin", import.meta.url);
 
 export interface FltWrapperTarget {
   path: string;
