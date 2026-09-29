@@ -17,6 +17,11 @@ export default {
   //   Remove one of these entries if that directory holds module content.
   //   A test file imports across modules as a fixture, and boundary rules
   //   read production code.
+  // - tmp and coverage. A checkout that has run a corpus or a coverage
+  //   report holds TypeScript under those trees, and one file there is an
+  //   uncovered-module (measured: tmp/corpus/noise.ts and coverage/noise.ts
+  //   each fired the rule). dist and node_modules are already outside the
+  //   walk, so they are not listed.
   exclude: [
     "archstrict.config.ts",
     "archstrict.types.ts",
@@ -24,6 +29,8 @@ export default {
     "**/.*/**",
     "test/**",
     "fixtures/**",
+    "tmp/**",
+    "coverage/**",
   ],
   // init declared one module per directory that holds TypeScript source and
   // one per TypeScript source file, so every file that check analyzes

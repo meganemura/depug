@@ -108,3 +108,14 @@ Measurements from 2026-09-03 on the same machine, for node:test.
 - Tests prove behavior by running the code path. A test that checks a string in the source does not count.
 - Keep each commit to one semantic unit. Write comments about why, not what.
 - Write for the reader who has no access to this session. Give numbers, the measured range, and what was not measured.
+
+
+<!-- ARCHSTRICT_START -->
+## archstrict
+
+In projects with an `archstrict.config.ts` (module-boundary/architecture linting), run `archstrict rules <path>` BEFORE creating a file or adding an import - it reports the module, tags, and constraints that would govern that path, even before it exists. Run `archstrict check` after editing to confirm.
+
+The full rule reference (every rule's evidence/because/do shape, the config schema, the pre-edit query) is at `node_modules/archstrict/skills/archstrict/SKILL.md` when installed via npm - read it before configuring `archstrict.config.ts`, or when a violation's `do:` text alone isn't enough.
+
+If there is no `archstrict.config.ts`, skip archstrict entirely - it may not be installed here.
+<!-- ARCHSTRICT_END -->
