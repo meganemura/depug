@@ -13,6 +13,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { MAX_SAMPLES, PROBE_LIMITS, createProbeRuntime } from "../src/probe-runtime.ts";
 import { runProbe } from "../src/verbs/probe.ts";
+import { run } from "../src/cli.ts";
 
 const FIXTURE_DIR = fileURLToPath(new URL("../fixtures/probe", import.meta.url));
 const VITEST_BIN = fileURLToPath(new URL("../node_modules/.bin/vitest", import.meta.url));
@@ -192,4 +193,14 @@ describe("what a probe records over many calls", () => {
       const sample = runtime.dump()["a.ts:f@1:1"].parameters[0].samples[0];
       expect(sample.length).toBeLessThanOrEqual(PROBE_LIMITS.max_value_length + 1);
     }));
+});
+
+describe("a rerun line pasted after the verb", () => {
+  // The skill tells an agent to paste the printed line, guard included,
+  // after any verb. probe used to run the guard itself, and its child run
+  // observed no call.
+  it("observes the calls the same as the bare command", () => {
+    const result = run(["probe", PARSE_USER, "--cwd", FIXTURE_DIR, "--", "npx", "depug", "rerun", "--", VITEST_BIN, "run", "app.test.ts"]);
+    expect(result.stdout).toMatch(new RegExp(`^${PARSE_USER}  calls: [1-9]`, "m"));
+  }, 180_000);
 });

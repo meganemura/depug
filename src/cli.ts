@@ -198,7 +198,7 @@ export function run(argv: readonly string[]): CliResult {
     if (parsed.operands.length === 0) {
       return { exitCode: 2, stdout: `depug: probe needs a function id\n\n${USAGE}` };
     }
-    const result = runProbe({ command: [...parsed.command], cwd, targets: parsed.operands });
+    const result = runProbe({ command: [...input.command], cwd, targets: parsed.operands });
     const path = resolve(cwd, "tmp", "depug", `probe-${process.pid}.json`);
     writeJson(path, result.output);
 
@@ -247,7 +247,7 @@ export function run(argv: readonly string[]): CliResult {
     }
 
     const result = runFlt({
-      command: [...parsed.command],
+      command: [...input.command],
       cwd,
       target: { ...target, call: target.call },
       indexPath: parsed.index ? resolve(cwd, parsed.index) : undefined,
@@ -300,7 +300,7 @@ export function run(argv: readonly string[]): CliResult {
       atLine: parsed.line,
       visit: parsed.visit ?? 1,
       expression: parsed.statement,
-      command: [...parsed.command],
+      command: [...input.command],
       cwd,
     });
     return { exitCode: result.error ? 2 : 0, stdout: `${formatExec(result)}\n` };

@@ -226,3 +226,15 @@ describe("the code-state gate on an index", () => {
     }
   }, 120_000);
 });
+
+describe("a rerun line pasted after the verb", () => {
+  // The skill tells an agent to paste the printed line, guard included,
+  // after any verb. flt used to run the guard itself, so the traced run
+  // was a child of `depug rerun` and observed no call at all.
+  it("traces the call the same as the bare command", () => {
+    const fid = fidFor(readRecords(framesFile()), "classify", 2);
+    const result = run(["flt", fid, "--cwd", FIXTURE_DIR, "--", "npx", "depug", "rerun", "--", VITEST_BIN, "run", "app.test.ts"]);
+    const records = readRecords(fltFileFrom(result.stdout));
+    expect(records.filter((r) => r.type !== "envelope").at(-1)).toMatchObject({ type: "return", value: { value: '"negative"' } });
+  }, 180_000);
+});

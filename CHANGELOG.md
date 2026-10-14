@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+`flt`, `probe`, and `exec` now strip the `npx depug rerun --` wrapper off
+a pasted rerun line, as 0.1.3 said every verb does. In 0.1.3 only
+`frames` and `preflight` did. The other three ran the wrapper as the
+command, so the instrumented run was a grandchild that never loaded
+their hooks: `flt` reported `call #1 did not happen; observed 0 call(s)`,
+and `probe` reported no calls, for a call that `frames` had just indexed
+from the same line. A nukadoko scenario that pasted the line as the skill
+says found it.
+
 ## 0.1.3 - 2026-09-11
 
 The command a failure prints now stops on its own.
