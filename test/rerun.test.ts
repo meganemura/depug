@@ -23,12 +23,15 @@ let marker: string | undefined;
 
 /** PIDs whose command line holds the marker. */
 function survivors(needle: string): string[] {
+  // pgrep runs directly, not under `sh -c`. A shell's own command line
+  // holds the needle, and pgrep excludes only itself, so on Linux, where
+  // dash does not exec the last command of `pgrep ... || true`, the probe
+  // reported its own shell as a survivor.
   try {
-    const out = execFileSync("/bin/sh", ["-c", `pgrep -f ${JSON.stringify(needle)} || true`], {
-      encoding: "utf8",
-    });
+    const out = execFileSync("pgrep", ["-f", needle], { encoding: "utf8" });
     return out.split("\n").filter((line) => line.trim() !== "");
   } catch {
+    // pgrep exits 1 when nothing matches.
     return [];
   }
 }
@@ -54,7 +57,7 @@ afterEach(() => {
   // Belt and braces: whatever the assertions did, nothing is left stuck.
   if (marker) {
     try {
-      execFileSync("/bin/sh", ["-c", `pkill -9 -f ${JSON.stringify(marker)} || true`]);
+      execFileSync("pkill", ["-9", "-f", marker]);
     } catch {
       // pkill finding nothing is the good case.
     }
