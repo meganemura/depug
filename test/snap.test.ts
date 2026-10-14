@@ -177,7 +177,9 @@ describe("the printed rerun command", () => {
       encoding: "utf8",
       timeout: 60_000,
     });
-    const output = `${result.stdout}${result.stderr}`;
+    // vitest colors its summary on a CI runner, and the escape codes split
+    // the text the pattern below matches.
+    const output = `${result.stdout}${result.stderr}`.replace(/\x1b\[[0-9;]*m/g, "");
     // The fixture holds 3 tests; the command must select exactly the one.
     expect(output, output).toMatch(/Tests\s+1 failed \| 2 skipped \(3\)/);
   }, 90_000);
@@ -225,7 +227,9 @@ describe("a rerun command for a test inside a describe", () => {
       encoding: "utf8",
       timeout: 60_000,
     });
-    const output = `${result.stdout}${result.stderr}`;
+    // vitest colors its summary on a CI runner, and the escape codes split
+    // the text the pattern below matches.
+    const output = `${result.stdout}${result.stderr}`.replace(/\x1b\[[0-9;]*m/g, "");
     // Two tests exist and one is a prefix of the other. Exactly one runs.
     expect(output, `${command}\n${output}\n${nestedRun.stdout}`).toMatch(
       /Tests\s+1 failed \| 1 skipped \(2\)/,
