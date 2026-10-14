@@ -31,6 +31,9 @@ export default {
     "fixtures/**",
     "tmp/**",
     "coverage/**",
+    // The nukadoko scenario runs the CLI as a process, like test/.
+    "features/**",
+    "nukadoko.config.ts",
   ],
   // init declared one module per directory that holds TypeScript source and
   // one per TypeScript source file, so every file that check analyzes
