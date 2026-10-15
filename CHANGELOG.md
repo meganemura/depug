@@ -7,6 +7,15 @@ publish workflow, instead of a pushed `v*` tag. After `npm publish`
 succeeds, the workflow creates the tag and the GitHub release on the
 published commit. Nobody pushes a release tag by hand.
 
+Under node:test, a Node process that a test starts no longer prints
+node:test's summary. The verbs load depug into node:test through
+`NODE_OPTIONS`, which every child process inherits, and depug registered
+its test hooks in each of them. In a child that ran no tests, that
+started node:test's harness, which appended `tests 0`, `suites 0`, and
+the rest to the child's stdout. A test that parsed a child CLI's JSON
+failed under `frames` and `preflight` for that reason. depug now registers
+the hooks only in a process whose own code imports `node:test`.
+
 `flt` on a call whose body is one expression now lists where the work
 went, instead of only saying to find it in a frames index. It names the
 calls that call made, each a full function id with its `#k`, ready for

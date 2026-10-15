@@ -408,6 +408,17 @@ never produce.
 The limit is recorded rather than worked around, because sequential tests
 are the common case and the public hook API costs nothing to use.
 
+Under node:test the hooks are registered only once the process's own code
+imports `node:test` (2026-10-15). `NODE_OPTIONS` carries the preload into
+every Node process a test starts, and registering `beforeEach` in one of
+those starts node:test's harness there, which prints a `tests 0` summary
+onto that process's stdout at exit. A test that parsed a child CLI's JSON
+failed under `frames` for that reason. The environment does not separate
+the two: a test's child inherits `NODE_TEST_CONTEXT=child-v8` from the
+test, measured on Node 24.22.0. An import of `node:test` does, and the
+hook's resolve step sees it before the importing module runs, so the
+hooks still precede every test it declares.
+
 ## The published name carries a scope (2026-09-03)
 
 The name sits one letter from `debug`, and that is what the registry

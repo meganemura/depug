@@ -18,7 +18,6 @@ import { registerHooks } from "node:module";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeEach } from "node:test";
 import { instrumentSource } from "./transform.ts";
 import { installGlobalRuntime } from "./runtime.ts";
 import { flushWorker } from "./collector.ts";
@@ -217,7 +216,22 @@ export function rewriteFor(mode: HookMode, root: string, path: string, text: str
 const mode = chooseMode(process.env);
 
 if (mode) {
+  // The test hooks wait for the process's own code to import node:test.
+  // A Node CLI a test starts loads this file too, through NODE_OPTIONS,
+  // and a beforeEach registered there starts node:test's harness, which
+  // prints its summary onto that CLI's stdout. The environment cannot
+  // tell the two apart, because the CLI inherits NODE_TEST_CONTEXT.
+  let testHooksRegistered = !(mode.attributesTests && mode.setCurrentTest);
   registerHooks({
+    resolve(specifier, context, nextResolve) {
+      if (!testHooksRegistered && specifier === "node:test") {
+        testHooksRegistered = true;
+        const { afterEach, beforeEach } = process.getBuiltinModule("node:test");
+        beforeEach((t: { name?: string }) => mode.setCurrentTest!(t?.name ?? null));
+        afterEach(() => mode.setCurrentTest!(null));
+      }
+      return nextResolve(specifier, context);
+    },
     load(url, context, nextLoad) {
       const result = nextLoad(url, context);
       if (!url.startsWith("file:")) return result;
@@ -233,11 +247,6 @@ if (mode) {
       return rewritten === undefined ? result : { ...result, source: rewritten };
     },
   });
-
-  if (mode.attributesTests && mode.setCurrentTest) {
-    beforeEach((t: { name?: string }) => mode.setCurrentTest!(t?.name ?? null));
-    afterEach(() => mode.setCurrentTest!(null));
-  }
 
   process.on("exit", () => mode.flush());
 }
