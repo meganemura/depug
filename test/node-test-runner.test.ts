@@ -136,8 +136,8 @@ describe("the verbs against node --test", () => {
       stdout: [
         "depug exec: refused",
         "depug note: src/sort.ts:<anonymous>@3:13 has no statement to evaluate at; its body is a single expression",
-        "depug note: exec in the function that holds it, src/sort.ts:order@1:17, at line 2, 3, or 4;" +
-          " its #k is the parent of this call in a frames index",
+        "depug note: exec in the function that holds it in the source, src/sort.ts:order@1:17," +
+          " at line 2, 3, or 4; take its #k from that id's calls in a frames index",
         "depug result: refused",
         "",
       ].join("\n"),

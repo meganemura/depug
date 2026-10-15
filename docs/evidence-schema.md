@@ -252,8 +252,9 @@ then rests on nothing.
 
 A command that could not start gets no verdict. `preflight`, like every
 re-execution verb, then prints one line, `depug result: could not start
-<program>: <code>` with the spawn error's code, such as `ENOENT`, writes no
-file, and exits 1.
+<program>: <code>` with the spawn error's code, such as `ENOENT`, and exits
+1. No index, trace, or result file is written; `frames` and `exec` may
+leave their empty run directory under `tmp/depug`.
 
 A divergence names where the two runs first differed and states that the
 test is not eligible:
@@ -366,11 +367,16 @@ no file and exits 1:
 ```text
 depug exec: refused
 depug note: src/sort.ts:<anonymous>@3:13 has no statement to evaluate at; its body is a single expression
-depug note: exec in the function that holds it, src/sort.ts:order@1:17, at line 2, 3, or 4; its #k is the parent of this call in a frames index
+depug note: exec in the function that holds it in the source, src/sort.ts:order@1:17, at line 2, 3, or 4; take its #k from that id's calls in a frames index
 depug result: refused
 ```
 
-A line with no statement names the lines that hold one instead.
+The enclosing function is the one that holds the target in the source,
+skipping any whose body is also one expression. It need not be the
+caller that a frames index records as `parent`: a callback passed to
+`map` inside another arrow has that arrow as its parent. Read the
+enclosing function's `#k` from the calls the index lists under its own
+id. A line with no statement names the lines that hold one instead.
 
 ## Targeted observation (`probe`)
 

@@ -186,8 +186,8 @@ function refusalFor(target: ParsedFid, input: RunExecInput): string[] | undefine
     const notes = [`${id} has no statement to evaluate at; its body is a single expression`];
     if (miss.enclosing) {
       notes.push(
-        `exec in the function that holds it, ${miss.enclosing.id}, at line ${orList(miss.enclosing.statementLines)};` +
-          " its #k is the parent of this call in a frames index",
+        `exec in the function that holds it in the source, ${miss.enclosing.id},` +
+          ` at line ${orList(miss.enclosing.statementLines)}; take its #k from that id's calls in a frames index`,
       );
     }
     return notes;

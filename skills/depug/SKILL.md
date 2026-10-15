@@ -245,8 +245,9 @@ depug result: fail (exit 1)
 `depug exec: refused` means there is nowhere to evaluate in that function:
 its body is one expression, or `--line` holds none of its statements. The
 notes name the lines that work, or the enclosing function to aim at
-instead; that function's `#k` is the `parent` of the call in the frames
-index.
+instead. That function holds the target in the source, which is not
+always the caller frames records as `parent`; take its `#k` from the calls
+the frames index lists under its own id.
 
 Read the result file before you treat the changed outcome as evidence. The
 expression can throw, change what the test does, and perform side effects,
@@ -260,7 +261,7 @@ else does.
 Treat these as absences the files declare, not as facts about the program.
 
 - **`depug result: could not start <program>: ENOENT`.** The command never
-  ran, so the verb wrote nothing and exits 1. Check the program name. A
+  ran, so the verb wrote no index or result and exits 1. Check the program name. A
   shell that does not split `$CMD`, such as zsh, passes the whole line as
   one name; write the command out after `--`.
 
