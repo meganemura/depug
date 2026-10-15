@@ -74,7 +74,22 @@ export function formatPreflight(result: PreflightResult): string {
     lines.push(`app calls: ${result.callCount} and ${result.secondCallCount}`);
     lines.push("This test is not eligible for depug re-execution.");
   }
+  if (result.callCount === 0 && result.secondCallCount === 0) {
+    lines.push("depug note: no application calls were recorded, so the two runs had no calls to compare");
+  }
   const files = [...result.files[0], ...result.files[1]];
   if (files.length > 0) lines.push(`depug preflight indexes: ${files.join(" ")}`);
+  const [first, second] = result.exitStatuses.map(describeExit);
+  lines.push(
+    first === second
+      ? `depug result: ${first} in both runs`
+      : `depug result: first run ${first}, second run ${second}`,
+  );
   return lines.join("\n");
+}
+
+function describeExit(status: number | null): string {
+  if (status === 0) return "pass (exit 0)";
+  if (status === null) return "no exit status (the child was killed or timed out)";
+  return `fail (exit ${status})`;
 }

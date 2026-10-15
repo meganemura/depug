@@ -73,7 +73,12 @@ depug preflight -- npx vitest run "test/user.test.ts" -t "parses a user" --seque
 
 ```text
 depug preflight: deterministic (app calls: 214)
+depug result: fail (exit 1) in both runs
 ```
+
+`deterministic` is about the calls; `depug result` is how the test ended.
+With `app calls: 0` there was nothing to compare, so fix `--include`
+before trusting the verdict.
 
 A divergence names where the two runs first differed and says the test is
 not eligible. That usually means the test depends on order-sensitive state

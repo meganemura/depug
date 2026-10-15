@@ -16,6 +16,13 @@ the rest to the child's stdout. A test that parsed a child CLI's JSON
 failed under `frames` and `preflight` for that reason. depug now registers
 the hooks only in a process whose own code imports `node:test`.
 
+`preflight` now ends with how the two runs ended, as `depug result: fail
+(exit 1) in both runs`, or each run's outcome when they differ.
+`deterministic` says the calls matched, not that the test passed, and a
+run that failed both times read as ready for `flt` and `exec`. When
+neither run recorded an application call, a note says there were no
+calls to compare.
+
 `flt` on a call whose body is one expression now lists where the work
 went, instead of only saying to find it in a frames index. It names the
 calls that call made, each a full function id with its `#k`, ready for

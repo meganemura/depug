@@ -240,7 +240,15 @@ two sequences of application calls.
 ```text
 depug preflight: deterministic (app calls: 214)
 depug preflight indexes: /abs/path/frames-41310.jsonl /abs/path/frames-41315.jsonl
+depug result: fail (exit 1) in both runs
 ```
+
+The verdict is about the calls, and the `depug result` line is about the
+test: a test that fails the same way twice is deterministic. Runs that
+ended differently are named one by one, as in `first run fail (exit 1),
+second run pass (exit 0)`. When neither run recorded an application call,
+a note says the two runs had no calls to compare, since `deterministic`
+then rests on nothing.
 
 A divergence names where the two runs first differed and states that the
 test is not eligible:
