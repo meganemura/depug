@@ -419,6 +419,11 @@ test, measured on Node 24.22.0. An import of `node:test` does, and the
 hook's resolve step sees it before the importing module runs, so the
 hooks still precede every test it declares.
 
+A known limit: code that reaches node:test through
+`process.getBuiltinModule("node:test")` resolves nothing, so the hooks
+are never registered there and its calls carry `test: null`. No project
+measured so far loads its test runner that way.
+
 ## The published name carries a scope (2026-09-03)
 
 The name sits one letter from `debug`, and that is what the registry
