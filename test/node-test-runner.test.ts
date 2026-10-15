@@ -21,6 +21,7 @@ import { detectRunner, withNodeTestHook } from "../src/runner.ts";
 import { runFrames } from "../src/verbs/frames.ts";
 import { runProbe } from "../src/verbs/probe.ts";
 import { runExec } from "../src/verbs/exec.ts";
+import { run } from "../src/cli.ts";
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/node-test", import.meta.url));
 const COMMAND = ["node", "--test", "app.test.ts"];
@@ -122,6 +123,42 @@ describe("the verbs against node --test", () => {
     expect(result.records[0]).toMatchObject({ type: "evaluation", value: "[1,2,3,4,5]" });
     expect(result.envelope.exit_status).not.toBe(0);
   }, 120_000);
+
+  it("refuses to exec in a function whose body is one expression, and names the one holding it", () => {
+    // frames indexes the comparator's call, so "did not happen" was false:
+    // there was no statement to evaluate before.
+    const result = run([
+      "exec", "src/sort.ts:<anonymous>@3:13#1", "--line", "3", "--statement", "a",
+      "--cwd", FIXTURE, "--", "node", "--test", "sort.test.ts",
+    ]);
+    expect(result).toEqual({
+      exitCode: 1,
+      stdout: [
+        "depug exec: refused",
+        "depug note: src/sort.ts:<anonymous>@3:13 has no statement to evaluate at; its body is a single expression",
+        "depug note: exec in the function that holds it, src/sort.ts:order@1:17, at line 2, 3, or 4;" +
+          " its #k is the parent of this call in a frames index",
+        "depug result: refused",
+        "",
+      ].join("\n"),
+    });
+  });
+
+  it("refuses a line that holds no statement of the function, and names the lines that do", () => {
+    const result = run([
+      "exec", "src/sort.ts:order@1:17#1", "--line", "9", "--statement", "xs",
+      "--cwd", FIXTURE, "--", "node", "--test", "sort.test.ts",
+    ]);
+    expect(result).toEqual({
+      exitCode: 1,
+      stdout: [
+        "depug exec: refused",
+        "depug note: line 9 holds no statement of src/sort.ts:order@1:17; its statements are on line 2, 3, or 4",
+        "depug result: refused",
+        "",
+      ].join("\n"),
+    });
+  });
 });
 
 describe("the always-on layer under node --test", () => {
