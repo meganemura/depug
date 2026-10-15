@@ -25,7 +25,8 @@ calls to compare.
 
 A command that cannot start now says so. `frames`, `preflight`, `probe`,
 `flt`, and `exec` print `depug result: could not start <program>: ENOENT`
-(or the spawn error's own code), write nothing, and exit 1. In 0.1.3 they
+(or the spawn error's own code), write no index or result file, and
+exit 1. In 0.1.3 they
 exited 0, `frames` and the others reported a child that was killed or
 timed out, and `preflight` called the pair deterministic. Found when zsh
 did not split `$CMD` and handed the whole command over as one program

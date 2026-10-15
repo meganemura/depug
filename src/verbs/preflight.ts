@@ -40,7 +40,8 @@ function firstDifference(a: readonly string[], b: readonly string[]): Divergence
 
 export function runPreflight(input: RunFramesInput): PreflightResult {
   const first = runFrames(input);
-  const second = runFrames(input);
+  // A second attempt at a program that could not start cannot go differently.
+  const second = first.startFailure ? first : runFrames(input);
 
   const firstCalls = callSequence(first.records);
   const secondCalls = callSequence(second.records);
