@@ -157,8 +157,26 @@ describe("a call with no statements of its own", () => {
     const fid = fidFor(readRecords(framesFile()), "makeAdder", 1);
     const result = cli("flt", fid);
     expect(result.stdout).toContain("no statements of its own to follow");
-    expect(result.stdout).toContain("frames index");
+    expect(result.stdout).toContain("calls of functions declared inside it, made later by their caller");
+    expect(result.stdout).toMatch(/^  src\/app\.ts:add@58:\d+#1$/m);
   }, 120_000);
+
+  it("names the call it made, ready for flt, and reads an index without a second run", () => {
+    const index = framesFile();
+    const fid = fidFor(readRecords(index), "doubled", 1);
+    const child = fidFor(readRecords(index), "double", 1);
+
+    const fresh = cli("flt", fid);
+    expect(fresh.stdout).toContain("the calls it made, each ready for flt (from one frames run of the same command):");
+    expect(fresh.stdout).toContain(`\n  ${child}\n`);
+
+    const indexed = cli("flt", fid, "--index", index);
+    expect(indexed.stdout).toContain("the calls it made, each ready for flt:");
+    expect(indexed.stdout).toContain(`\n  ${child}\n`);
+    // The id it printed is the next flt's input as is.
+    const followed = readRecords(fltFileFrom(cli("flt", child).stdout));
+    expect(followed.some((r) => r.type === "line")).toBe(true);
+  }, 180_000);
 });
 
 describe("where a call left from", () => {

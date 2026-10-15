@@ -13,10 +13,11 @@ import { writeJson } from "./evidence.ts";
 import { parseFid } from "./fid.ts";
 import { renderDeclared, renderObserved } from "./shape-report.ts";
 import { readFileSync } from "node:fs";
-import { functionsContaining } from "./function-range.ts";
+import { functionRanges, functionsContaining } from "./function-range.ts";
 import { countCandidates, displayPrefix, isUnderAny, resolveIncludes, testFileIn } from "./include.ts";
 import { declaresProjects, findProjectConfig } from "./wrapper-config.ts";
 import { runFrames } from "./verbs/frames.ts";
+import type { FrameRecord } from "./collector.ts";
 import { runFlt } from "./verbs/flt.ts";
 import { formatPreflight, runPreflight } from "./verbs/preflight.ts";
 import { runProbe } from "./verbs/probe.ts";
@@ -279,7 +280,7 @@ export function run(argv: readonly string[]): CliResult {
         "depug note: this call has no statements of its own to follow; " +
           "its body is a single expression, so the work is in a function it calls",
       );
-      lines.push("depug note: find that call in a frames index and trace it instead");
+      lines.push(...describeChildCalls(fidArg, input, parsed.index ? resolve(cwd, parsed.index) : undefined));
     }
     lines.push(`depug result: ${describeExit(result.envelope.exit_status)}`);
     return { exitCode: 0, stdout: `${lines.join("\n")}\n` };
@@ -363,6 +364,83 @@ function formatSamples(samples: readonly string[], omitted: number): string {
  * calls the index actually recorded are listed: a function that holds the
  * line but never ran is not something to trace.
  */
+/**
+ * Where the work of a statement-less call went, read from the index the
+ * agent passed or, without one, from one frames run of the same command:
+ * the calls it made, and the calls of functions declared inside it (a
+ * function it returned runs later, from its caller). The agent's next
+ * step is `flt` on one of them, and finding them by hand means building
+ * that index and searching it by parent and by position.
+ */
+function describeChildCalls(
+  fid: string,
+  input: { command: string[]; cwd: string; includePathPrefixes: string[] },
+  indexPath: string | undefined,
+): string[] {
+  const records: readonly FrameRecord[] = indexPath ? readIndexRecords(indexPath) : runFrames(input).records;
+  const calls = records.filter((record) => record.type === "call");
+  const children = calls.filter((record) => record.parent === fid);
+  // Only when it called nothing: a call it made is where its work went,
+  // and the callbacks declared inside it would bury that call.
+  const nested = children.length > 0 ? [] : nestedCalls(fid, input.cwd, calls);
+  if (children.length === 0 && nested.length === 0) {
+    return [
+      "depug note: it made no call depug recorded, and no function declared inside it ran;" +
+        " its callee is outside --include, so widen --include to the file that holds it",
+    ];
+  }
+  const source = indexPath ? "" : " (from one frames run of the same command)";
+  const lines: string[] = [];
+  if (children.length > 0) {
+    lines.push(`depug note: the calls it made, each ready for flt${source}:`);
+    for (const record of children) lines.push(`  ${record.fid}`);
+  }
+  if (nested.length > 0) {
+    lines.push(`depug note: calls of functions declared inside it, made later by their caller${source}:`);
+    for (const record of nested.slice(0, NESTED_LIMIT)) lines.push(`  ${record.fid}`);
+    if (nested.length > NESTED_LIMIT) lines.push(`  (${nested.length - NESTED_LIMIT} more in the index)`);
+  }
+  return lines;
+}
+
+const NESTED_LIMIT = 10;
+
+function nestedCalls(fid: string, cwd: string, calls: readonly FrameRecord[]): FrameRecord[] {
+  const target = parseFid(fid);
+  if (!target) return [];
+  let text: string;
+  try {
+    text = readFileSync(resolve(cwd, target.path), "utf8");
+  } catch {
+    return [];
+  }
+  const own = functionRanges(text, target.path).find(
+    (range) => range.line === target.line && range.column === target.column,
+  );
+  if (!own) return [];
+  return calls.filter(
+    (record) =>
+      record.path === target.path &&
+      record.line >= own.startLine &&
+      record.line <= own.endLine &&
+      !(record.line === target.line && record.column === target.column),
+  );
+}
+
+function readIndexRecords(path: string): FrameRecord[] {
+  const records: FrameRecord[] = [];
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    if (line.trim() === "") continue;
+    try {
+      const record = JSON.parse(line) as FrameRecord;
+      if (record.type === "call" || record.type === "return") records.push(record);
+    } catch {
+      // A torn last line from an interrupted run carries nothing to list.
+    }
+  }
+  return records;
+}
+
 function describeAt(at: string, cwd: string, records: readonly { type: string; fid: string }[]): string[] {
   const separator = at.lastIndexOf(":");
   const path = at.slice(0, separator);

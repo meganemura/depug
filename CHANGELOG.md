@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+`flt` on a call whose body is one expression now lists where the work
+went, instead of only saying to find it in a frames index. It names the
+calls that call made, each a full function id with its `#k`, ready for
+the next `flt`; when it made none and returned a function, it names the
+calls of the functions declared inside it. With `--index`, the list comes
+from that index; without it, from one frames run of the same command.
+Found by following a function that returns `new Promise(...)` in another
+project's failing test: the answer was in the executor, two verbs away.
+
 `flt`, `probe`, and `exec` now strip the `npx depug rerun --` wrapper off
 a pasted rerun line, as 0.1.3 said every verb does. In 0.1.3 only
 `frames` and `preflight` did. The other three ran the wrapper as the

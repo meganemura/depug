@@ -59,3 +59,12 @@ export const makeAdder = (base: number) =>
     const sum = base + n;
     return sum;
   };
+
+// An arrow whose single expression is a call: its work is in the callee,
+// a frame of its own made while this call is still on the stack.
+export const doubled = (n: number) => double(n);
+
+function double(n: number): number {
+  const result = n * 2;
+  return result;
+}

@@ -186,6 +186,13 @@ line  16  changed: {"sections": {"old": ["", "", "ffff", "0.0.0.1"], "new": ["",
 Line 16 is the answer: an embedded IPv4 address collapsed into one group
 instead of two.
 
+A call whose body is one expression, such as an arrow returning another
+call or `new Promise((resolve) => {...})`, has no statements to follow.
+`flt` then names the calls it made, each a full id for the next `flt`, or,
+when it made none and returned a function, the calls of the functions
+declared inside it. With `--index`, it reads them from that frames index;
+without it, it runs the test once more to build one.
+
 Records arrive in completion order, not source order, because each is
 written after its statement finishes. Read the `line` field. A loop keeps
 its first and last iteration and folds the middle into a marker carrying

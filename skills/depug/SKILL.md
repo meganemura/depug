@@ -148,6 +148,20 @@ Line 11 is where the leading empty segment disappeared. That is the answer
 `probe` cannot give, because `probe` reports the shape of a value and both
 arrays are the kind `array`.
 
+A call whose body is one expression, like `(n) => helper(n)` or a
+function that returns `new Promise((resolve) => {...})`, has no statements
+of its own, so its trace is a `call` and a `return` with nothing between.
+`flt` then lists where the work went, each id ready for the next `flt`:
+
+```text
+depug note: the calls it made, each ready for flt (from one frames run of the same command):
+  src/run.ts:<anonymous>@170:22#1
+```
+
+When it made no call but returned a function, the list is the calls of the
+functions declared inside it instead. Pass `--index <frames file>` to read
+the list from an index you already have instead of a second run.
+
 Three things to know while reading a trace:
 
 - **A statement that leaves the function produces no `line` record.** A
