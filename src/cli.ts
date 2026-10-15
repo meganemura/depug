@@ -310,7 +310,7 @@ export function run(argv: readonly string[]): CliResult {
       cwd,
     });
     if (result.startFailure) return notStarted(result.startFailure);
-    return { exitCode: result.error ? 2 : 0, stdout: `${formatExec(result)}\n` };
+    return { exitCode: result.error ? 2 : result.refused ? 1 : 0, stdout: `${formatExec(result)}\n` };
   }
 
   if (parsed.verb === "rerun") {

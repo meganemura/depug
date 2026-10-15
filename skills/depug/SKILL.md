@@ -242,6 +242,12 @@ depug result: fail (exit 1)
 
 `--visit K` selects a later visit to that line; the default is the first.
 
+`depug exec: refused` means there is nowhere to evaluate in that function:
+its body is one expression, or `--line` holds none of its statements. The
+notes name the lines that work, or the enclosing function to aim at
+instead; that function's `#k` is the `parent` of the call in the frames
+index.
+
 Read the result file before you treat the changed outcome as evidence. The
 expression can throw, change what the test does, and perform side effects,
 and the run's own outcome is reported beside the value for that reason.

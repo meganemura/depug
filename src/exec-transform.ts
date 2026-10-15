@@ -16,12 +16,22 @@ import ts from "typescript";
 import { SKIP, forEachNode } from "./ast-walk.ts";
 import { functionIdentity, type NamedFunction } from "./function-identity.ts";
 
+/**
+ * Why nothing was injected. A launcher that only saw `injected: false`
+ * could not tell a wrong id from a right id aimed where no statement is,
+ * and reported both as a call that never happened.
+ */
+export type ExecMiss =
+  | { kind: "no-function" }
+  /** The nearest enclosing function with statements, where there is one. */
+  | { kind: "expression-body"; enclosing?: { id: string; statementLines: number[] } }
+  | { kind: "no-statement"; statementLines: number[] };
+
 export interface ExecTransformResult {
   code: string;
-  /** True where the target function and the target line were both found. */
   injected: boolean;
-  /** Lines holding a statement of the target function, for a better error. */
-  candidateLines: number[];
+  /** Set exactly when `injected` is false. */
+  miss?: ExecMiss;
 }
 
 export interface ExecTarget {
@@ -76,6 +86,22 @@ function ownStatements(fn: NamedFunction, sourceFile: ts.SourceFile): { node: ts
   return found;
 }
 
+function statementLines(fn: NamedFunction, sourceFile: ts.SourceFile): number[] {
+  return [...new Set(ownStatements(fn, sourceFile).map((s) => s.line))].sort((a, b) => a - b);
+}
+
+function enclosingWithStatements(fn: NamedFunction, sourceFile: ts.SourceFile, fileId: string) {
+  for (let node = fn.parent; node; node = node.parent) {
+    if (isFunctionLike(node) && ts.isBlock(node.body!)) {
+      return {
+        id: functionIdentity(node, sourceFile, fileId).id,
+        statementLines: statementLines(node, sourceFile),
+      };
+    }
+  }
+  return undefined;
+}
+
 /**
  * Splices the guarded evaluation into `source`.
  *
@@ -104,29 +130,36 @@ export function instrumentExec(
       return SKIP;
     }
   });
-  if (!fn) return { code: source, injected: false, candidateLines: [] };
+  if (!fn) return { code: source, injected: false, miss: { kind: "no-function" } };
+  if (!ts.isBlock(fn.body!)) {
+    // An expression-bodied arrow holds one expression and no statement to
+    // evaluate before, so there is nothing to inject at.
+    return {
+      code: source,
+      injected: false,
+      miss: { kind: "expression-body", enclosing: enclosingWithStatements(fn, sourceFile, fileId) },
+    };
+  }
 
-  const statements = ownStatements(fn, sourceFile);
-  const candidateLines = [...new Set(statements.map((s) => s.line))].sort((a, b) => a - b);
-  const at = statements.find((statement) => statement.line === target.targetLine);
-  if (!at) return { code: source, injected: false, candidateLines };
+  const at = ownStatements(fn, sourceFile).find((statement) => statement.line === target.targetLine);
+  if (!at) {
+    return {
+      code: source,
+      injected: false,
+      miss: { kind: "no-statement", statementLines: statementLines(fn, sourceFile) },
+    };
+  }
 
   const insertions: Insertion[] = [];
   const callVar = "__depug_exec_call";
 
   // The call counter lives at the function's entry, so a target naming
   // `#2` evaluates on the second call and not on the first.
-  if (ts.isBlock(fn.body!)) {
-    insertions.push({
-      offset: fn.body.getStart(sourceFile) + 1,
-      text: `const ${callVar}=__depugExec.enter();`,
-      order: 0,
-    });
-  } else {
-    // An expression-bodied arrow holds one expression and no statement to
-    // evaluate before, so there is nothing to inject at.
-    return { code: source, injected: false, candidateLines };
-  }
+  insertions.push({
+    offset: fn.body.getStart(sourceFile) + 1,
+    text: `const ${callVar}=__depugExec.enter();`,
+    order: 0,
+  });
 
   // The expression is evaluated inside a guard, and both outcomes are
   // recorded: an expression that throws is an observation, not a crash to
@@ -145,5 +178,5 @@ export function instrumentExec(
   for (const insertion of insertions) {
     code = code.slice(0, insertion.offset) + insertion.text + code.slice(insertion.offset);
   }
-  return { code, injected: true, candidateLines };
+  return { code, injected: true };
 }

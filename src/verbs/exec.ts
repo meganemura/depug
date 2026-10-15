@@ -12,10 +12,11 @@
 // on the next ordinary test run.
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { readCodeState, type CodeState } from "../code-state.ts";
 import { SCHEMA_VERSION } from "../evidence.ts";
-import { parseFid } from "../fid.ts";
+import { parseFid, type ParsedFid } from "../fid.ts";
+import { instrumentExec } from "../exec-transform.ts";
 import { EXEC_TOKEN, type ExecRecord } from "../exec-runtime.ts";
 import { writeExecWrapperConfig } from "./exec-wrapper-config.ts";
 import { applyConfigArgument } from "../wrapper-config.ts";
@@ -38,6 +39,8 @@ export interface ExecResult {
   stderr: string;
   /** Set when the id could not be read, before anything was run. */
   error?: string;
+  /** Notes saying why nothing can be evaluated there, set instead of running. */
+  refused?: string[];
   /** Set when the command never started, so there is no outcome to read. */
   startFailure?: string;
 }
@@ -73,6 +76,11 @@ export function runExec(input: RunExecInput): ExecResult {
       stderr: "",
       error: "exec needs a complete function id, including #k",
     };
+  }
+
+  const refused = refusalFor(parsed, input);
+  if (refused) {
+    return { file: null, records: [], envelope: empty, stdout: "", stderr: "", refused };
   }
 
   const base = process.env.DEPUG_OUTPUT_DIR ?? join(input.cwd, "tmp", "depug");
@@ -150,9 +158,63 @@ export function runExec(input: RunExecInput): ExecResult {
   };
 }
 
+/**
+ * Notes for an aim the rewrite cannot inject at, read from the source
+ * before anything runs. Without them the run injects nothing, the call
+ * counter never moves, and the report says the call did not happen.
+ *
+ * A file this cannot read, or an id it cannot find there, is left to the
+ * run: an id's path is relative to the runner's root, which need not be
+ * the directory exec was given.
+ */
+function refusalFor(target: ParsedFid, input: RunExecInput): string[] | undefined {
+  let source: string;
+  try {
+    source = readFileSync(resolve(input.cwd, target.path), "utf8");
+  } catch {
+    return undefined;
+  }
+  const { miss } = instrumentExec(source, target.path, {
+    name: target.name,
+    line: target.line,
+    column: target.column,
+    targetLine: input.atLine,
+    expression: "undefined",
+  });
+  const id = `${target.path}:${target.name}@${target.line}:${target.column}`;
+  if (miss?.kind === "expression-body") {
+    const notes = [`${id} has no statement to evaluate at; its body is a single expression`];
+    if (miss.enclosing) {
+      notes.push(
+        `exec in the function that holds it, ${miss.enclosing.id}, at line ${orList(miss.enclosing.statementLines)};` +
+          " its #k is the parent of this call in a frames index",
+      );
+    }
+    return notes;
+  }
+  if (miss?.kind === "no-statement") {
+    return [
+      miss.statementLines.length === 0
+        ? `${id} has no statements to evaluate at`
+        : `line ${input.atLine} holds no statement of ${id}; its statements are on line ${orList(miss.statementLines)}`,
+    ];
+  }
+  return undefined;
+}
+
+function orList(lines: readonly number[]): string {
+  if (lines.length <= 2) return lines.join(" or ");
+  return `${lines.slice(0, -1).join(", ")}, or ${lines[lines.length - 1]}`;
+}
+
 /** The report a reader sees, in the same shape whichever way it went. */
 export function formatExec(result: ExecResult): string {
   if (result.error) return `depug: ${result.error}`;
+  if (result.refused) {
+    return ["depug exec: refused", ...result.refused.map((note) => `depug note: ${note}`), "depug result: refused"].join(
+      "\n",
+    );
+  }
   const lines: string[] = [];
   if (result.file) lines.push(`depug exec: ${result.file}`);
 

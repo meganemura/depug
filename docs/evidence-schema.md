@@ -358,6 +358,20 @@ Where the call happens but the line never reaches the requested visit, the
 collector writes an `evaluation_summary` record with
 `line_visits_observed`, `target_visit`, and `evaluated: false`.
 
+`exec` reads the target's source before it runs anything. When the
+function's body is a single expression, or `--line` holds none of the
+function's own statements, there is nowhere to evaluate, so `exec` writes
+no file and exits 1:
+
+```text
+depug exec: refused
+depug note: src/sort.ts:<anonymous>@3:13 has no statement to evaluate at; its body is a single expression
+depug note: exec in the function that holds it, src/sort.ts:order@1:17, at line 2, 3, or 4; its #k is the parent of this call in a frames index
+depug result: refused
+```
+
+A line with no statement names the lines that hold one instead.
+
 ## Targeted observation (`probe`)
 
 One JSON file for one or more named functions.

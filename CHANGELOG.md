@@ -31,6 +31,14 @@ timed out, and `preflight` called the pair deterministic. Found when zsh
 did not split `$CMD` and handed the whole command over as one program
 name.
 
+`exec` now refuses, with exit 1, an aim it cannot evaluate at, instead of
+reporting `call #1 did not happen; observed 0 call(s)` for a call that
+`frames` had indexed. A function whose body is one expression, such as a
+sort comparator `(a, b) => a - b`, holds no statement to evaluate before;
+the refusal names the enclosing function and its statement lines. A
+`--line` that holds none of the function's statements names the lines
+that do. Found on a comparator in another project's suite.
+
 `flt` on a call whose body is one expression now lists where the work
 went, instead of only saying to find it in a frames index. It names the
 calls that call made, each a full function id with its `#k`, ready for

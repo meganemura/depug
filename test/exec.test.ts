@@ -103,7 +103,7 @@ describe("the injection rewrite", () => {
     expect(bad.injected).toBe(false);
     expect(bad.code).toBe(source);
     // The lines that would have worked, so a caller can correct the aim.
-    expect(bad.candidateLines).toContain(21);
+    expect(bad.miss).toEqual({ kind: "no-statement", statementLines: [19, 20, 21, 23] });
   });
 
   it("renders a value shallowly and survives one that will not render", () => {
