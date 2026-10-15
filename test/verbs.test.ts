@@ -142,6 +142,9 @@ describe("preflight", () => {
     // It names both indexes, so a reader can compare them by hand.
     const line = /^depug preflight indexes: (.+)$/m.exec(result.stdout)![1];
     expect(line.split(" ")).toHaveLength(2);
+    // The calls matching says nothing about the test passing, and this
+    // test fails on purpose.
+    expect(result.stdout).toMatch(/^depug result: fail \(exit 1\) in both runs$/m);
   }, 180_000);
 });
 
@@ -289,6 +292,32 @@ describe("comparing two runs", () => {
       files: [[], []], exitStatuses: [null, null],
     });
     expect(report).toContain("app calls: 0");
+    expect(report).toContain(
+      "depug result: no exit status (the child was killed or timed out) in both runs",
+    );
+  });
+
+  it("names each run's outcome when the two runs ended differently", () => {
+    const report = formatPreflight({
+      deterministic: true, callCount: 2, secondCallCount: 2, fullMatched: true,
+      files: [[], []], exitStatuses: [1, 0],
+    });
+    expect(report.split("\n")).toEqual([
+      "depug preflight: deterministic (app calls: 2)",
+      "depug result: first run fail (exit 1), second run pass (exit 0)",
+    ]);
+  });
+
+  it("says when the two runs matched only because neither made a call", () => {
+    const report = formatPreflight({
+      deterministic: true, callCount: 0, secondCallCount: 0, fullMatched: true,
+      files: [[], []], exitStatuses: [1, 1],
+    });
+    expect(report.split("\n")).toEqual([
+      "depug preflight: deterministic (app calls: 0)",
+      "depug note: no application calls were recorded, so the two runs had no calls to compare",
+      "depug result: fail (exit 1) in both runs",
+    ]);
   });
 });
 
