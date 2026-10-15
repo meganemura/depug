@@ -20,6 +20,7 @@ import { EXEC_TOKEN, type ExecRecord } from "../exec-runtime.ts";
 import { writeExecWrapperConfig } from "./exec-wrapper-config.ts";
 import { applyConfigArgument } from "../wrapper-config.ts";
 import { detectRunner, withNodeTestHook, type Runner } from "../runner.ts";
+import { describeExit, startFailure } from "../child-outcome.ts";
 
 export interface ExecEnvelope {
   type: "envelope";
@@ -37,6 +38,8 @@ export interface ExecResult {
   stderr: string;
   /** Set when the id could not be read, before anything was run. */
   error?: string;
+  /** Set when the command never started, so there is no outcome to read. */
+  startFailure?: string;
 }
 
 export interface RunExecInput {
@@ -143,6 +146,7 @@ export function runExec(input: RunExecInput): ExecResult {
     envelope: { ...empty, exit_status: child.status },
     stdout: child.stdout ?? "",
     stderr: child.stderr ?? "",
+    startFailure: startFailure(child, bin),
   };
 }
 
@@ -178,10 +182,4 @@ export function formatExec(result: ExecResult): string {
   // own outcome is part of the result rather than a footnote.
   lines.push(`depug result: ${describeExit(result.envelope.exit_status)}`);
   return lines.join("\n");
-}
-
-function describeExit(status: number | null): string {
-  if (status === 0) return "pass (exit 0)";
-  if (status === null) return "no exit status (the child was killed or timed out)";
-  return `fail (exit ${status})`;
 }

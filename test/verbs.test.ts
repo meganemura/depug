@@ -16,7 +16,7 @@ import { parseFid, fidWithoutCall, formatFid } from "../src/fid.ts";
 import { applyConfigArgument, findProjectConfig } from "../src/wrapper-config.ts";
 import { eventsToJsonl, flushWorker, readWorkerFiles, toFrameRecord } from "../src/collector.ts";
 import { createRuntime } from "../src/runtime.ts";
-import { seedFromCommand } from "../src/verbs/frames.ts";
+import { runFrames, seedFromCommand } from "../src/verbs/frames.ts";
 import { formatPreflight } from "../src/verbs/preflight.ts";
 import { run, wantsHelp } from "../src/cli.ts";
 
@@ -168,6 +168,24 @@ describe("a command that cannot start", () => {
       });
     } finally {
       delete process.env.DEPUG_OUTPUT_DIR;
+      rmSync(output, { recursive: true, force: true });
+    }
+  });
+
+  it("still reads a child stopped on its clock as killed, not as never started", () => {
+    const output = mkdtempSync(join(tmpdir(), "depug-killed-"));
+    try {
+      const result = runFrames({
+        command: ["sleep", "5"],
+        cwd: FIXTURE_DIR,
+        includePathPrefixes: [`${FIXTURE_DIR}/src`],
+        runner: "node",
+        framesDir: output,
+        timeoutMs: 200,
+      });
+      expect(result.startFailure).toBeUndefined();
+      expect(result.envelope.exit_status).toBeNull();
+    } finally {
       rmSync(output, { recursive: true, force: true });
     }
   });

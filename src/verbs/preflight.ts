@@ -8,6 +8,7 @@
 // and it measures the pair the verbs actually operate on: two isolated
 // runs, not the suite.
 import { runFrames, callSequence, fullSequence, type RunFramesInput } from "./frames.ts";
+import { describeExit } from "../child-outcome.ts";
 
 export interface Divergence {
   index: number;
@@ -25,6 +26,8 @@ export interface PreflightResult {
   divergence?: Divergence;
   files: [string[], string[]];
   exitStatuses: [number | null, number | null];
+  /** Set when the command never started, so there is no outcome to read. */
+  startFailure?: string;
 }
 
 function firstDifference(a: readonly string[], b: readonly string[]): Divergence | undefined {
@@ -52,6 +55,7 @@ export function runPreflight(input: RunFramesInput): PreflightResult {
     divergence,
     files: [first.files, second.files],
     exitStatuses: [first.envelope.exit_status, second.envelope.exit_status],
+    startFailure: first.startFailure ?? second.startFailure,
   };
 }
 
@@ -86,10 +90,4 @@ export function formatPreflight(result: PreflightResult): string {
       : `depug result: first run ${first}, second run ${second}`,
   );
   return lines.join("\n");
-}
-
-function describeExit(status: number | null): string {
-  if (status === 0) return "pass (exit 0)";
-  if (status === null) return "no exit status (the child was killed or timed out)";
-  return `fail (exit ${status})`;
 }

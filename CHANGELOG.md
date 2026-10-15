@@ -23,6 +23,14 @@ run that failed both times read as ready for `flt` and `exec`. When
 neither run recorded an application call, a note says there were no
 calls to compare.
 
+A command that cannot start now says so. `frames`, `preflight`, `probe`,
+`flt`, and `exec` print `depug result: could not start <program>: ENOENT`
+(or the spawn error's own code), write nothing, and exit 1. In 0.1.3 they
+exited 0, `frames` and the others reported a child that was killed or
+timed out, and `preflight` called the pair deterministic. Found when zsh
+did not split `$CMD` and handed the whole command over as one program
+name.
+
 `flt` on a call whose body is one expression now lists where the work
 went, instead of only saying to find it in a frames index. It names the
 calls that call made, each a full function id with its `#k`, ready for

@@ -250,6 +250,11 @@ second run pass (exit 0)`. When neither run recorded an application call,
 a note says the two runs had no calls to compare, since `deterministic`
 then rests on nothing.
 
+A command that could not start gets no verdict. `preflight`, like every
+re-execution verb, then prints one line, `depug result: could not start
+<program>: <code>` with the spawn error's code, such as `ENOENT`, writes no
+file, and exits 1.
+
 A divergence names where the two runs first differed and states that the
 test is not eligible:
 

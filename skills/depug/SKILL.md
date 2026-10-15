@@ -253,6 +253,11 @@ else does.
 
 Treat these as absences the files declare, not as facts about the program.
 
+- **`depug result: could not start <program>: ENOENT`.** The command never
+  ran, so the verb wrote nothing and exits 1. Check the program name. A
+  shell that does not split `$CMD`, such as zsh, passes the whole line as
+  one name; write the command out after `--`.
+
 - **A `suspend` with no `resume` after it.** The awaited value rejected, so
   the resume record never ran. Read the call's own `return` record with
   `exit_kind: "throw"` beside it.

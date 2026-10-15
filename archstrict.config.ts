@@ -48,6 +48,7 @@ export default {
     // Each directory and TypeScript source file directly in src/.
     { name: "ast-walk.ts", glob: "src/ast-walk.ts", surface: "ast-walk.ts" },
     { name: "cli.ts", glob: "src/cli.ts", surface: "cli.ts" },
+    { name: "child-outcome.ts", glob: "src/child-outcome.ts", surface: "child-outcome.ts" },
     { name: "code-state.ts", glob: "src/code-state.ts", surface: "code-state.ts" },
     { name: "collector.ts", glob: "src/collector.ts", surface: "collector.ts" },
     { name: "declared-type.ts", glob: "src/declared-type.ts", surface: "declared-type.ts" },

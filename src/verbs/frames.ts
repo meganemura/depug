@@ -13,6 +13,7 @@ import { readWorkerFiles, type FrameRecord } from "../collector.ts";
 import { SCHEMA_VERSION } from "../evidence.ts";
 import { applyConfigArgument, writeWrapperConfig } from "../wrapper-config.ts";
 import { detectRunner, withNodeTestHook, type Runner } from "../runner.ts";
+import { startFailure } from "../child-outcome.ts";
 
 export interface FramesEnvelope {
   type: "envelope";
@@ -31,6 +32,8 @@ export interface FramesResult {
   envelope: FramesEnvelope;
   stdout: string;
   stderr: string;
+  /** Set when the command never started, so there is no outcome to read. */
+  startFailure?: string;
 }
 
 /**
@@ -156,6 +159,7 @@ export function runFrames(input: RunFramesInput): FramesResult {
     envelope,
     stdout: child.stdout ?? "",
     stderr: child.stderr ?? "",
+    startFailure: startFailure(child, bin),
   };
 }
 

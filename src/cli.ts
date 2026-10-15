@@ -23,6 +23,7 @@ import { formatPreflight, runPreflight } from "./verbs/preflight.ts";
 import { runProbe } from "./verbs/probe.ts";
 import { formatExec, runExec } from "./verbs/exec.ts";
 import { TIMED_OUT, runRerun, withoutGuard } from "./verbs/rerun.ts";
+import { describeExit } from "./child-outcome.ts";
 
 export interface CliResult {
   exitCode: number;
@@ -147,6 +148,7 @@ export function run(argv: readonly string[]): CliResult {
 
   if (parsed.verb === "frames") {
     const result = runFrames(input);
+    if (result.startFailure) return notStarted(result.startFailure);
     const calls = result.records.filter((r) => r.type === "call").length;
     const lines: string[] = [];
     for (const file of result.files) lines.push(`depug frames: ${file}`);
@@ -192,6 +194,7 @@ export function run(argv: readonly string[]): CliResult {
 
   if (parsed.verb === "preflight") {
     const result = runPreflight(input);
+    if (result.startFailure) return notStarted(result.startFailure);
     return { exitCode: 0, stdout: `${formatPreflight(result)}\n` };
   }
 
@@ -200,6 +203,7 @@ export function run(argv: readonly string[]): CliResult {
       return { exitCode: 2, stdout: `depug: probe needs a function id\n\n${USAGE}` };
     }
     const result = runProbe({ command: [...input.command], cwd, targets: parsed.operands });
+    if (result.startFailure) return notStarted(result.startFailure);
     const path = resolve(cwd, "tmp", "depug", `probe-${process.pid}.json`);
     writeJson(path, result.output);
 
@@ -254,6 +258,7 @@ export function run(argv: readonly string[]): CliResult {
       indexPath: parsed.index ? resolve(cwd, parsed.index) : undefined,
     });
 
+    if (result.startFailure) return notStarted(result.startFailure);
     if (result.refused) {
       const lines = ["depug flt: refused", `depug note: ${result.refused}`, "depug result: refused"];
       return { exitCode: 1, stdout: `${lines.join("\n")}\n` };
@@ -304,6 +309,7 @@ export function run(argv: readonly string[]): CliResult {
       command: [...input.command],
       cwd,
     });
+    if (result.startFailure) return notStarted(result.startFailure);
     return { exitCode: result.error ? 2 : 0, stdout: `${formatExec(result)}\n` };
   }
 
@@ -480,14 +486,18 @@ function describeAt(at: string, cwd: string, records: readonly { type: string; f
   return lines;
 }
 
+/**
+ * The whole report for a command that never started. Every other line a
+ * verb prints describes a run, and there was none, so a note about missing
+ * calls would send a reader to the wrong fix.
+ */
+function notStarted(reason: string): CliResult {
+  return { exitCode: 1, stdout: `depug result: ${reason}\n` };
+}
+
 function describeSource(source: "flag" | "package.json" | "default"): string {
   if (source === "flag") return "the command line";
   if (source === "package.json") return "package.json";
   return "the default";
 }
 
-function describeExit(status: number | null): string {
-  if (status === 0) return "pass (exit 0)";
-  if (status === null) return "no exit status (the child was killed or timed out)";
-  return `fail (exit ${status})`;
-}

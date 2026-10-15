@@ -26,6 +26,7 @@ import type { ProbeFunctionRecord, ProbePosition } from "../probe-runtime.ts";
 import type { ProbeTarget } from "../probe-transform.ts";
 import { applyConfigArgument } from "../wrapper-config.ts";
 import { detectRunner, withNodeTestHook, type Runner } from "../runner.ts";
+import { startFailure } from "../child-outcome.ts";
 import { writeProbeWrapperConfig } from "./probe-config.ts";
 import { toolVersion } from "../tool-version.ts";
 
@@ -70,6 +71,8 @@ export interface ProbeResult {
   exitStatus: number | null;
   stdout: string;
   stderr: string;
+  /** Set when the command never started, so there is no outcome to read. */
+  startFailure?: string;
 }
 
 function readAll<T>(dir: string, prefix: string): T[] {
@@ -203,5 +206,6 @@ export function runProbe(input: RunProbeInput): ProbeResult {
     exitStatus: child.status,
     stdout: child.stdout ?? "",
     stderr: child.stderr ?? "",
+    startFailure: startFailure(child, bin),
   };
 }

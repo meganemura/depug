@@ -19,6 +19,7 @@ import type { FltRecord } from "../flt-runtime.ts";
 import { writeFltWrapperConfig } from "./flt-wrapper-config.ts";
 import { applyConfigArgument } from "../wrapper-config.ts";
 import { detectRunner, withNodeTestHook } from "../runner.ts";
+import { startFailure } from "../child-outcome.ts";
 
 export interface FltEnvelope {
   type: "envelope";
@@ -58,6 +59,8 @@ export interface FltResult {
   refused?: string;
   /** Set when --index's comparison could not be made at all (git unavailable on either side). */
   codeStateWarning?: string;
+  /** Set when the command never started, so there is no outcome to read. */
+  startFailure?: string;
 }
 
 export function freshFltDir(cwd: string): string {
@@ -201,6 +204,7 @@ export function runFlt(input: RunFltInput): FltResult {
     stdout: child.stdout ?? "",
     stderr: child.stderr ?? "",
     codeStateWarning,
+    startFailure: startFailure(child, bin),
   };
 }
 
