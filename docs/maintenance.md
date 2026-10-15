@@ -195,13 +195,15 @@ first pass and only surfaced from an installed package.
 
 ## Releasing
 
-Pushing a `v*` tag runs
-[`.github/workflows/publish.yml`](../.github/workflows/publish.yml). The
-job waits for the GitHub Environment `publish`, then publishes with
+A version bump in `package.json` that lands on `main` runs
+[`.github/workflows/publish.yml`](../.github/workflows/publish.yml).
+Nobody pushes a `v*` tag by hand: the workflow creates the tag and the
+GitHub release after `npm publish` succeeds. The publish job waits for
+the GitHub Environment `publish`, then publishes with
 GitHub Actions OIDC. It stores no `NPM_TOKEN`. The Trusted Publisher
 and that Environment are already configured. The field values, when the
 approval appears, and what each version does are in
-[`docs/releasing.md`](releasing.md). Whether to tag, and whether to
+[`docs/releasing.md`](releasing.md). Whether to bump the version, and whether to
 approve that environment, stay the owner's decision at that moment.
 Changing the repository's visibility is the same kind of decision, and
 this workflow does not make it.

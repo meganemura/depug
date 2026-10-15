@@ -3,16 +3,20 @@
 `@meganemura/depug` is already on npm. Versions `0.1.0` through `0.1.3`
 were published by hand, and an unauthenticated `npm view` reads them.
 A later release is the npm package, a git tag whose name is `v` plus
-the `package.json` version, and a GitHub release for that tag. Pushing
-the tag runs
+the `package.json` version, and a GitHub release for that tag. A push
+to `main` that changes `package.json` runs
 [`.github/workflows/publish.yml`](../.github/workflows/publish.yml).
+Nobody pushes a `v*` tag by hand.
 
-That workflow is the steady-state path. It checks the tag against
-`package.json`, installs the tagged commit, builds `dist/`, runs
+That workflow is the steady-state path. Its `check` job reads the
+`package.json` version and looks for the tag `v<version>`. When that
+tag already exists, the run releases nothing, so a dependency bump or
+any other edit to `package.json` publishes nothing. Otherwise the
+publish job installs the pushed commit, builds `dist/`, runs
 `npm test`, refuses the run if any tracked file changed, and runs
-`npm publish`. After that publish succeeds, a second job creates the
-GitHub release for the same tag. The publish job keeps `contents: read`
-and is the only job that holds the npm OIDC token. The release job asks
+`npm publish`. After that publish succeeds, the release job creates the
+tag on the published commit and the GitHub release for it. The publish
+job keeps `contents: read` and is the only job that holds the npm OIDC token. The release job asks
 for `contents: write` and nothing else, so the token that can publish
 the package cannot also write repository contents. npm authenticates
 with GitHub Actions OIDC. Provenance is attached automatically because
@@ -21,15 +25,21 @@ the repository and the package are public. The publish job sets
 waits there until a required reviewer approves it.
 
 Registering the Trusted Publisher does not create a pending approval.
-The approval appears only when a `v*` tag run enters the Environment
-`publish`.
+The approval appears only when a run started by a version bump on
+`main` enters the Environment `publish`.
+
+The Environment's deployment branch and tag rules must allow
+deployments from `main`. A rule that allows only `v*` tags blocks every
+run, because the workflow now starts from a push to `main` and the tag
+does not exist until the release job creates it. Setting that rule is
+the owner's step in the repository settings.
 
 The Trusted Publisher and the Environment `publish` are already
 configured, as of 2026-09-23. Recreate one only if it is missing. The
 next section records the values to put back.
 
 The package ships compiled JavaScript in `dist/`. `dist/` is gitignored.
-The workflow builds it from the tagged commit, and that build is what the
+The workflow builds it from the pushed commit, and that build is what the
 tarball contains. `package.json` `files` also packs `src/`, `bin/`,
 `skills/`, `docs/`, `AGENTS.md`, `CHANGELOG.md`, and `LICENSE`. npm always
 packs `README.md` and `package.json` as well.
@@ -77,12 +87,13 @@ On the GitHub repository `meganemura/depug`, the Environment is named
 `publish` and requires reviewers. The workflow job sets
 `environment: publish`, so a run waits until a reviewer approves it.
 If that Environment has been removed, create it again, with required
-reviewers, before the next tag. Otherwise GitHub creates it on that
+reviewers, before the next version bump lands on `main`. Otherwise GitHub creates it on that
 run with no required reviewers, and that run publishes as soon as the
 checks pass.
 
 Saving the publisher still does not open a review. The approval shows
-up on the Actions run for the tag, when that run enters `publish`.
+up on the Actions run for the version bump, when that run enters
+`publish`.
 
 After an OIDC publish from `publish.yml` has succeeded, the package
 settings can be tightened. This is optional, and it waits until that
@@ -111,23 +122,29 @@ runs. A later bump replaces the SHA and the version comment together.
 
 ## Each version
 
-What to check before the tag is in [`docs/maintenance.md`](maintenance.md).
-The workflow's `npm test` leaves `DEPUG_CORPUS_DIR` unset, so the two
-corpus tests skip there. Run them before the tag.
+What to check before the version bump is in
+[`docs/maintenance.md`](maintenance.md). The workflow's `npm test`
+leaves `DEPUG_CORPUS_DIR` unset, so the two corpus tests skip there.
+Run them before the version bump.
 
-1. Add a changelog heading in the shape already used,
+1. In one commit, turn the `## Unreleased` section of `CHANGELOG.md`
+   into a heading in the shape already used,
    `## <version> - YYYY-MM-DD`, and set the same version in
-   `package.json`. The tag, without the leading `v`, is that version.
-   The workflow stops when they differ.
+   `package.json` and `package-lock.json`. The release job's awk matches
+   `## <version> ` followed by a space, so keep the ` - YYYY-MM-DD`
+   after the version. The workflow names the tag `v` plus the
+   `package.json` version, and the release job fails when the changelog
+   has no section for it.
 
 2. Run `npm test` with `DEPUG_CORPUS_DIR` set, and the packed-tarball
    check in `docs/maintenance.md`. `npm test` type-checks and then runs
    vitest. `prepublishOnly` does not run under `ignore-scripts`, so build
    by hand before `npm pack`.
 
-3. Commit the version bump. Tag `v<version>`. Push the commit and the
-   tag. The tag push starts the workflow. This publish is `publish.yml`
-   only. Do not run `npm publish` from a checkout.
+3. Land the version bump commit on `main` through the `queue` branch.
+   Do not push a tag. The push to `main` that changes `package.json`
+   starts the workflow. This publish is `publish.yml` only. Do not run
+   `npm publish` from a checkout.
 
 4. Approve the `publish` environment on that Actions run. The review is
    requested when the job enters the environment, which is this run.
@@ -142,17 +159,10 @@ corpus tests skip there. Run them before the tag.
    for people running depug.
 
 5. After `npm publish` succeeds, the workflow's `release` job creates
-   the GitHub release. It checks out the same commit the publish job
-   built, extracts only that version's section from `CHANGELOG.md`
-   (`--notes-file CHANGELOG.md` would carry every version), and runs
-   `gh release create --verify-tag`. A release that already exists is
-   left in place, so re-running the tag is safe. If that job fails,
-   extract the section and create the release by hand. Set `version`
-   to the version you tagged. `0.1.3` below is the heading already in
-   the changelog, so the pattern is visible; substitute the new version:
-
-   ```sh
-   version=0.1.3
-   awk -v v="$version" '$0 ~ "^## " v " " {in_version=1; next} /^## /{in_version=0} in_version' CHANGELOG.md > notes.md
-   gh release create "v$version" --title "v$version" --notes-file notes.md --verify-tag
-   ```
+   the tag and the GitHub release. It checks out the same commit the
+   publish job built, extracts only that version's section from
+   `CHANGELOG.md` (`--notes-file CHANGELOG.md` would carry every
+   version), and runs `gh release create --target` with that commit,
+   which creates the tag `v<version>` there. A release that already
+   exists is left in place, so re-running the job is safe. If that job
+   fails, re-run it from the Actions run.

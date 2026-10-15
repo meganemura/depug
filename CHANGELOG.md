@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+A version bump in `package.json` that lands on `main` now starts the
+publish workflow, instead of a pushed `v*` tag. After `npm publish`
+succeeds, the workflow creates the tag and the GitHub release on the
+published commit. Nobody pushes a release tag by hand.
+
 `flt` on a call whose body is one expression now lists where the work
 went, instead of only saying to find it in a frames index. It names the
 calls that call made, each a full function id with its `#k`, ready for
