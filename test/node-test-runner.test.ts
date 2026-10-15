@@ -70,6 +70,22 @@ describe("the verbs against node --test", () => {
     expect(calls[1].test).toBe("propagates an error out of app code");
   }, 120_000);
 
+  it("leaves a Node CLI the test starts printing what it prints", () => {
+    // The child inherits NODE_OPTIONS, so it loads the hook too. It is not
+    // a test run, and node:test's summary on its stdout broke the JSON the
+    // test read back.
+    const result = runFrames({
+      command: ["node", "--test", "spawn.test.ts"],
+      cwd: FIXTURE,
+      includePathPrefixes: [`${FIXTURE}/src`],
+    });
+    expect(result.envelope.exit_status).toBe(0);
+    const calls = records(result.files[0]).filter((r) => r.type === "call");
+    expect(calls.map((c) => [c.fid, c.test])).toEqual([
+      ["src/app.ts:total@4:17#1", "reads the JSON a child Node CLI prints"],
+    ]);
+  }, 120_000);
+
   it("records a throw as a throw", () => {
     const result = runFrames({
       command: COMMAND,
@@ -248,6 +264,26 @@ describe("reading a V8 stack string", () => {
 describe("choosing what to do from the variables a verb set", () => {
   const ROOT = "/repo";
   const SOURCE = ["export function f(n: number): number {", "  return n + 1;", "}", ""].join("\n");
+
+  it("keeps the stdout of a process that never imports node:test", () => {
+    const env: Record<string, string | undefined> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (key.startsWith("VITEST") || key.startsWith("TINYPOOL")) continue;
+      env[key] = value;
+    }
+    env.DEPUG_FRAMES_DIR = mkdtempSync(join(tmpdir(), "depug-plainchild-"));
+    env.DEPUG_ROOT = FIXTURE;
+    env.DEPUG_DISABLE = "1";
+    env.NODE_OPTIONS = withNodeTestHook(undefined);
+    const child = spawnSync(process.execPath, ["-e", 'process.stdout.write("{\\"ok\\":true}\\n")'], {
+      cwd: FIXTURE,
+      env: env as NodeJS.ProcessEnv,
+      encoding: "utf8",
+      timeout: 60_000,
+    });
+    expect(child.stdout).toBe('{"ok":true}\n');
+    expect(child.status).toBe(0);
+  }, 60_000);
 
   it("does nothing at all when no verb asked for anything", () => {
     // The hook is preloaded by NODE_OPTIONS, which a project may have set
