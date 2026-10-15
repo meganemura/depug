@@ -148,6 +148,31 @@ describe("preflight", () => {
   }, 180_000);
 });
 
+describe("a command that cannot start", () => {
+  it.each([
+    ["frames"],
+    ["preflight"],
+    ["probe", "src/app.ts:explode@1:1"],
+    ["flt", "src/app.ts:explode@1:1#1"],
+    ["exec", "src/app.ts:explode@1:1#1", "--line", "2", "--statement", "1"],
+  ])("%s says the program never started and exits non-zero", (...verb) => {
+    // A shell that does not split "$CMD" hands the whole line over as one
+    // program name. That run had no outcome, and reporting it as a kill,
+    // a missing call, or a deterministic pair sent readers the wrong way.
+    const output = mkdtempSync(join(tmpdir(), "depug-nostart-"));
+    process.env.DEPUG_OUTPUT_DIR = output;
+    try {
+      expect(run([...verb, "--cwd", FIXTURE_DIR, "--", "no-such-program-xyz", "run"])).toEqual({
+        exitCode: 1,
+        stdout: "depug result: could not start no-such-program-xyz: ENOENT\n",
+      });
+    } finally {
+      delete process.env.DEPUG_OUTPUT_DIR;
+      rmSync(output, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("the command line itself", () => {
   it("refuses a call with no command after the separator", () => {
     expect(run(["frames"]).exitCode).toBe(2);
