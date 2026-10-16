@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 - 2026-10-16
 
 A version bump in `package.json` that lands on `main` now starts the
 publish workflow, instead of a pushed `v*` tag. After `npm publish`
