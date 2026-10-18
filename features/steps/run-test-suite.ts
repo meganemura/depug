@@ -1,8 +1,9 @@
-import { defineStep, z } from "nukadoko";
-import { spawnSync } from "node:child_process";
+import { defineStep, runCommand, z } from "nukadoko";
 import { join } from "node:path";
 import createVitestProject from "./create-vitest-project.ts";
 
+// The reporter writes the evidence file under the project's tmp/, so the run
+// changes the project.
 export default defineStep({
   description: "Runs `vitest run` in the project and reads the `depug evidence:` and `depug rerun:` lines the reporter prints.",
   pattern: "the agent runs the test suite",
@@ -15,14 +16,12 @@ export default defineStep({
   }),
   from: { root: [createVitestProject, "root"] },
   mutates: true,
-  rationale: "The reporter writes the evidence file under the project's tmp/, so the run changes the project.",
-  run({}, { root }) {
-    const result = spawnSync(join(root, "node_modules/.bin/vitest"), ["run"], { cwd: root, encoding: "utf8" });
-    if (result.error) throw result.error;
+  async run({}, { root }) {
+    const result = await runCommand(join(root, "node_modules/.bin/vitest"), ["run"], { cwd: root });
     const output = `${result.stdout}\n${result.stderr}`;
     const evidence = /^depug evidence: (\S+) \((.+)\)$/m.exec(output);
     const rerun = /^depug rerun: (.+)$/m.exec(output);
     if (evidence === null || rerun === null) throw new Error(`the reporter printed no evidence or rerun line:\n${output}`);
-    return { exitCode: result.status ?? 1, evidencePath: evidence[1]!, evidenceNote: evidence[2]!, rerunLine: rerun[1]! };
+    return { exitCode: result.exitCode ?? 1, evidencePath: evidence[1]!, evidenceNote: evidence[2]!, rerunLine: rerun[1]! };
   },
 });

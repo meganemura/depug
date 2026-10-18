@@ -1,9 +1,9 @@
 // Runs depug from source against a scratch project, the way an agent
 // pastes a verb in front of the rerun line the reporter printed. The line
 // goes through a shell because it is shell text: the test name is quoted.
-import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { runCommand } from "nukadoko";
 
 export const DEPUG_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const BIN = fileURLToPath(new URL("../../bin/depug.ts", import.meta.url));
@@ -13,11 +13,10 @@ export interface VerbResult {
   stdout: string;
 }
 
-export function runVerb(verb: string[], rerunLine: string, root: string): VerbResult {
+export async function runVerb(verb: string[], rerunLine: string, root: string): Promise<VerbResult> {
   const quoted = [process.execPath, BIN, ...verb].map((word) => `'${word.replaceAll("'", "'\\''")}'`).join(" ");
-  const result = spawnSync("sh", ["-c", `${quoted} -- ${rerunLine}`], { cwd: root, encoding: "utf8" });
-  if (result.error) throw result.error;
-  return { exitCode: result.status ?? 1, stdout: result.stdout };
+  const result = await runCommand("sh", ["-c", `${quoted} -- ${rerunLine}`], { cwd: root });
+  return { exitCode: result.exitCode ?? 1, stdout: result.stdout };
 }
 
 /** The file path a verb prints on its `depug <verb>: <path>` line. */

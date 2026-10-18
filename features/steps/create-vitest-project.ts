@@ -24,6 +24,10 @@ it("charges every item", () => {
 });
 `;
 
+// The reporter is imported from this checkout's source and node_modules is a
+// link to this checkout's, so the scenario runs the code under review without
+// a build or an install. A git repository gives the evidence a code state to
+// record.
 export default defineStep({
   description:
     "Writes a scratch vitest project whose config adds depug's reporter beside the default one. `checkout` calls `subtotal`, which skips the first price, so the test's assertion fails after `subtotal` has returned.",
@@ -37,8 +41,6 @@ export default defineStep({
     wrongTotal: z.string().describe("the value the helper returns, as depug prints it"),
   }),
   mutates: true,
-  rationale:
-    "The reporter is imported from this checkout's source and node_modules is a link to this checkout's, so the scenario runs the code under review without a build or an install. A git repository gives the evidence a code state to record.",
   run({ scratch }) {
     const root = scratch.dir("depug-scenario-project");
     mkdirSync(join(root, "src"));
