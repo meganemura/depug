@@ -77,7 +77,7 @@
     "@types/node": "26.4.0",
     "@vitest/coverage-v8": "4.1.11",
     "archstrict": "0.1.0",
-    "nukadoko": "0.17.0",
+    "nukadoko": "0.18.0",
     "vitest": "4.1.11"
   }
 }
