@@ -39,6 +39,8 @@ export default defineStep({
     caller: z.string().describe("the function the test calls"),
     helper: z.string().describe("the function that produced the wrong value and returned before the assertion"),
     wrongTotal: z.string().describe("the value the helper returns, as depug prints it"),
+    loopStart: z.string().describe("the first value of the helper's loop counter `i`, as depug prints it: the second price's index"),
+    helperCall: z.string().describe("the call counter at the end of the helper call's function id: checkout calls subtotal once, so `#1`"),
   }),
   mutates: true,
   run({ scratch }) {
@@ -56,6 +58,6 @@ export default defineConfig({ test: { include: ["*.test.ts"], reporters: ["defau
     writeFileSync(join(root, "src/cart.ts"), CART);
     writeFileSync(join(root, "cart.test.ts"), TEST);
     execFileSync("git", ["init", "--quiet"], { cwd: root });
-    return { root, testName: "charges every item", caller: "checkout", helper: "subtotal", wrongTotal: "30" };
+    return { root, testName: "charges every item", caller: "checkout", helper: "subtotal", wrongTotal: "30", loopStart: "1", helperCall: "#1" };
   },
 });

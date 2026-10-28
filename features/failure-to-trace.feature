@@ -9,7 +9,7 @@ Feature: Follow a failed test from its evidence to the statement that went wrong
   Scenario: the evidence sends the agent to frames, and flt shows where the value went wrong
     Given a vitest project with depug's reporter and a test that fails on a value a helper already returned
     When the agent runs the test suite
-    Then the failure prints an evidence file saying the value's source already returned, and a rerun line
+    Then the failure prints an evidence file saying "the value's source already returned; rerun to reach it", and a rerun line starting with "npx depug rerun -- npx vitest run"
     When the agent puts frames in front of the rerun line
     Then the index names the helper's call under the function the test called
     When the agent puts flt with that call in front of the rerun line

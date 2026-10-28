@@ -4,32 +4,35 @@ import createVitestProject from "./create-vitest-project.ts";
 import runTestSuite from "./run-test-suite.ts";
 
 // The note is what sends an agent to a verb rather than to the stack, so the
-// step checks its exact wording.
+// sentence states its exact wording.
 export default defineStep({
   description:
-    "Asserts the suite failed, the evidence file names the failing test and says the value's source already returned, and the rerun line wraps a vitest command for that test in `npx depug rerun --`.",
-  pattern: "the failure prints an evidence file saying the value's source already returned, and a rerun line",
+    "Claims the suite failed, the evidence file names the failing test, the note is the sentence's, and the rerun line starts with the sentence's command and holds the test's name.",
+  pattern: "the failure prints an evidence file saying {note:string}, and a rerun line starting with {command:string}",
   args: z.object({
-    exitCode: z.number(),
-    evidencePath: z.string(),
-    evidenceNote: z.string(),
-    rerunLine: z.string(),
-    testName: z.string(),
+    note: z.string().describe("the parenthetical the reporter prints after the evidence path"),
+    command: z.string().describe("the depug wrapper and the vitest command the rerun line starts with"),
+    outcome: runTestSuite.returns.shape.outcome,
+    evidencePath: runTestSuite.returns.shape.evidencePath,
+    evidenceNote: runTestSuite.returns.shape.evidenceNote,
+    rerunLine: runTestSuite.returns.shape.rerunLine,
+    testName: createVitestProject.returns.shape.testName,
   }),
   from: {
-    exitCode: [runTestSuite, "exitCode"],
+    outcome: [runTestSuite, "outcome"],
     evidencePath: [runTestSuite, "evidencePath"],
     evidenceNote: [runTestSuite, "evidenceNote"],
     rerunLine: [runTestSuite, "rerunLine"],
     testName: [createVitestProject, "testName"],
   },
-  mutates: false,
-  run({}, { exitCode, evidencePath, evidenceNote, rerunLine, testName }) {
-    if (exitCode !== 1) throw new Error(`expected vitest to exit 1, got ${exitCode}`);
-    const evidence = JSON.parse(readFileSync(evidencePath, "utf8")) as { test: { name: string } };
-    if (evidence.test.name !== testName) throw new Error(`the evidence names ${evidence.test.name}, not ${testName}`);
-    if (evidenceNote !== "the value's source already returned; rerun to reach it") throw new Error(`unexpected note: ${evidenceNote}`);
-    if (!rerunLine.startsWith("npx depug rerun -- npx vitest run ")) throw new Error(`unexpected rerun line: ${rerunLine}`);
-    if (!rerunLine.includes(testName)) throw new Error(`the rerun line does not name ${testName}: ${rerunLine}`);
+  observe({}, { evidencePath }) {
+    return { evidence: readFileSync(evidencePath, "utf8") };
   },
+  claims: [
+    { actual: "outcome", compare: "equal", expected: { literal: "failure" } },
+    { actual: "evidence", view: "json", at: "test.name", compare: "equal", expected: { from: "testName" } },
+    { actual: "evidenceNote", compare: "equal", expected: "note" },
+    { actual: "rerunLine", compare: "starts-with-text", expected: "command" },
+    { actual: "rerunLine", compare: "contains-text", expected: { from: "testName" } },
+  ],
 });

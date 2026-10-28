@@ -10,6 +10,7 @@ export default defineStep({
   args: z.object({ root: z.string() }),
   returns: z.object({
     exitCode: z.number().describe("vitest's exit code: 1 when a test failed"),
+    outcome: z.enum(["success", "failure", "error"]).describe("vitest's exit code by its meaning: 0 success, 1 failure, any other error"),
     evidencePath: z.string().describe("the absolute path on the `depug evidence:` line"),
     evidenceNote: z.string().describe("the parenthetical after that path, which says whether the file can answer"),
     rerunLine: z.string().describe("the command on the `depug rerun:` line, as printed"),
@@ -22,6 +23,8 @@ export default defineStep({
     const evidence = /^depug evidence: (\S+) \((.+)\)$/m.exec(output);
     const rerun = /^depug rerun: (.+)$/m.exec(output);
     if (evidence === null || rerun === null) throw new Error(`the reporter printed no evidence or rerun line:\n${output}`);
-    return { exitCode: result.exitCode ?? 1, evidencePath: evidence[1]!, evidenceNote: evidence[2]!, rerunLine: rerun[1]! };
+    const exitCode = result.exitCode ?? 1;
+    const outcome = exitCode === 0 ? ("success" as const) : exitCode === 1 ? ("failure" as const) : ("error" as const);
+    return { exitCode, outcome, evidencePath: evidence[1]!, evidenceNote: evidence[2]!, rerunLine: rerun[1]! };
   },
 });
