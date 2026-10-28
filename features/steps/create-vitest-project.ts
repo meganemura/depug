@@ -1,7 +1,8 @@
 import { defineStep, z } from "nukadoko";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { DEPUG_ROOT } from "./depug-cli.ts";
 
 const CART = `export function subtotal(prices: number[]): number {
@@ -16,6 +17,8 @@ export function checkout(prices: number[]): string {
 }
 `;
 
+const NODE_MODULES = dirname(dirname(createRequire(import.meta.url).resolve("vitest/package.json")));
+
 const TEST = `import { expect, it } from "vitest";
 import { checkout } from "./src/cart.ts";
 
@@ -24,10 +27,12 @@ it("charges every item", () => {
 });
 `;
 
-// The reporter is imported from this checkout's source and node_modules is a
-// link to this checkout's, so the scenario runs the code under review without
-// a build or an install. A git repository gives the evidence a code state to
-// record.
+// The reporter is imported from this checkout's source, and node_modules is a
+// link to the directory this checkout resolves packages from, not a path
+// under it: `nuka run --base` runs the steps from a tree with no
+// node_modules of its own. So the scenario runs the code under review
+// without a build or an install. A git repository gives the evidence a code
+// state to record.
 export default defineStep({
   description:
     "Writes a scratch vitest project whose config adds depug's reporter beside the default one. `checkout` calls `subtotal`, which skips the first price, so the test's assertion fails after `subtotal` has returned.",
@@ -46,7 +51,7 @@ export default defineStep({
   run({ scratch }) {
     const root = scratch.dir("depug-scenario-project");
     mkdirSync(join(root, "src"));
-    symlinkSync(join(DEPUG_ROOT, "node_modules"), join(root, "node_modules"), "dir");
+    symlinkSync(NODE_MODULES, join(root, "node_modules"), "dir");
     writeFileSync(
       join(root, "vitest.config.ts"),
       `import { defineConfig } from "vitest/config";
